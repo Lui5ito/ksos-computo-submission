@@ -4,36 +4,38 @@ project:
     - main.qmd
     - README.qmd
 
-title: "Template for contribution to Computo"
-subtitle: "Example dedicated to `Python` users"
+title: |
+  Joint learning of RKHS and kernel sum-of-squares functions:\
+  a representer theorem and its convex dual
+subtitle: ""
 author:
-  - name: Jane Doe
+  - name: Louis Allain
     corresponding: true
-    email: janedoe@nowhere.moon
-    url: https://janedoe.someplace.themoon.org
-    orcid: 0000-0000-0000-0000
+    email: louis.allain@safrangroup.com
+    url: 
+    orcid: 0009-0005-1009-0198
     affiliations:
-      - name: Name of Affiliation one
-        department: Statistics
-        url: https://someplace.themoon.org
-  - name: John Doe
-    email: johndoe@nowhere.moon
-    url: https://johndoe.someplace.themoon.org
-    orcid: 0000-0000-0000-0000
+      - name: Safran AI Research, Magny-Les-Hameaux, France
+        url: https://www.safran-group.com/group/innovation/safran-tech
+      - name: Univ Rennes, Ensai, CNRS, CREST - UMR 9194, F-35000 Rennes, France
+        url: https://crest.science/
+  - name: Sébastien Da Veiga
+    email: sebastien.da-veiga@ensai.fr 
+    url: https://sites.google.com/view/sebastien-da-veiga/home
+    orcid: 0009-0004-1637-7942
     affiliations:
-      - name: Name of Affiliation two
-        department: Computer Science
-        url: https://someplace.themoon.org
+      - name: Univ Rennes, Ensai, CNRS, CREST - UMR 9194, F-35000 Rennes, France
+        url: https://crest.science/
 date: last-modified
 date-modified: last-modified
 abstract: >+
-  Template for preparing a submission to Computo, using the [quarto journal extension](https://github.com/computorg/computo-quarto-extension), the Jupyter kernel (Python user) and the environment files to set-up the dependencies.
-
-  For a detailed, step-by-step guide on preparing your article, setting up the continuous integration and submitting it to Computo, please consult the [guidelines for authors](https://computo-journal.org/site/guidelines-authors.html).
-keywords: [key1, key2, key3]
+  Kernel sum-of-squares (kSoS) models represent a non-negative function as a quadratic form in an reproducing kernel Hilbert space (RKHS), guaranteeing non-negativity everywhere. It has emerged as a promising kernel approach to model non-negative phenomena, leveraging a representer theorem that makes the problem tractable. 
+  This result only holds for kSoS functions, and with the same RKHS. However, real-world problems may require to learn general-valued functions _jointly_ with kSoS functions, and may also benefit from different kernels for each kSoS function for better predictive accuracy.
+  In this work, we thus consider such wider class of statistical learning problems, where we are interested in jointly learning $p$ real valued functions and $q$ non-negative functions defined on different RKHS. Building on representer theorems from traditional kernel methods and kSoS, we introduce a new generalized representer theorem for that learning problem. The induced finite-dimensional problem is a semi-definite program (SDP), easily solvable using off-the-shelf solvers. To scale better than SDP solvers, we also establish a convex dual formulation, which writes as an optimization problem with only $\mathcal{O}(n)$ variables and no positive semi-definite constraints. Finally, for completeness and to highlight the potential of the kSoS framework, we derive the explicit dual formulations for three kSoS problems previously introduced in the literature and provide two new problems leveraging the generalized representer theorem. All our experiments are reproducible with our accompanying Python code.
+keywords: [kernel sum-of-squares, statistical learning]
 bibliography: references.bib
-github-user: computorg
-repo: "template-computo-python"
+github-user: Lui5ito
+repo: "computo"
 status: submitted
 license: CC-BY-4.0
 citation:
@@ -41,6 +43,9 @@ citation:
   container-title: "Computo"
   issn: "2824-7795"
   doi: "10.5072/computo.0000" # placeholder DOI (10.5072 is the official DOI test prefix), replace once assigned
+crossref:
+  cnj-title: Assumption
+  cnj-prefix: Assumption
 format:
   computo-html: default
   computo-pdf: default

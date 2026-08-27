@@ -1,7 +1,17 @@
-name: template-python
+name: computo
 channels:
   - conda-forge
 dependencies:
   - jupyter
-  - matplotlib
-  - numpy
+  - ipykernel=7.3.0
+  - matplotlib=3.10.9
+  - numpy=2.4.6
+  - scipy=1.17.1
+  - scikit-learn=1.8.0
+  - tqdm=4.68.1
+  - nbclient=0.11.0
+  - nbformat=5.11.1
+  - pyyaml=6.0.3
+  - pip
+  - pip:
+      - -e .

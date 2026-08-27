@@ -1,197 +1,2344 @@
-# Introduction
+# Introduction {#sec-introduction}
 
-## About this document
+Non-negative functions often appear in physics and statistics
+applications. When modelling real physical systems for example,
+prediction of quantities such as concentration, prices or distances,
+must satisfy non-negativity everywhere at the risk of violating physical
+laws. In statistics, common estimation problems include modelling a
+variance or a probability density function, and the final estimate can
+be highly sensitive to local non-negativity violation. Even a minor
+negative estimate can have great consequences on the real world decision
+taken based upon that statistical model. Furthermore, non-negative
+functions can even appear through the reformulation of an initial
+complex problem. This is for instance the case in global optimization or
+in optimal transport, but also when the statistical task involves the
+estimation of monotonic or convex functions. In machine learning and
+statistics, the ability to estimate a non-negative function, being
+non-negative everywhere, is thus critical.\
+The most common way to account for non-negativity in a statistical
+problem is through the use of a so-called link function. Given such a
+link function $\psi \colon \mathbb{R} \longrightarrow \mathcal{Y}$, the
+unknown function is modelled as $\psi(f(x))$ and we learn the function
+$f$ freely. Common examples of link functions are the exponential
+function $\psi(z) = e^{z}$ and the popular ReLU function
+$\psi(z) = \max(0,z)$ or its smooth variant $\psi(z) = \ln(1+e^{z})$,
+the Softplus function. Using a link function is simple yet has strong
+expressive power: indeed the estimation of $f$ can be done using a
+parametric model such as a neural network, or kernel methods, both
+universal approximators. But the choice of the link function here is
+crucial. Indeed, as noted by @marteauferey2020, nice properties of the
+loss function such as convexity may not be preserved for some link
+functions, and they may also complexify potential additional constraints
+that are tractable for $f$ but not for $\psi(f(x))$.\
+Other prominent works in the literature focus on linear models with
+non-negative coefficients and basis functions. Here, the function of
+interest is modelled as $f(x) = \sum_{i}w_i h_i(x)$ for some
+non-negative basis functions $h_i$ (e.g. B-splines or specific kernel
+functions), and such a linear model yields a non-negative function as
+long as the coefficients $w_i$ are positive. Despite the seeming
+expressiveness that comes from the choice of the basis, especially with
+kernel methods, restricting the coefficient to be positive however
+reduces the search space to the conical hull, which ultimately limits
+the expressiveness of the final estimated function $f$.\
+Finally, a more principled way to handle non-negativity is to directly
+model the function of interest as a sum-of-squares:
+$f(x) = \sum_i h_{i}(x)^2$. This structurally guarantees non-negativity
+without requiring a complex, possibly non-convex link function. For
+optimization problems, this sum-of-squares representation was introduced
+by @parrilo2000 and @lasserre2001, in order to transform a global and
+non-convex optimization problem into a sequence of semi-definite
+programs. For a modern introduction, we refer the interested reader to
+@bach2024. Equivalently, remark that a sum-of-squares function can be
+written as the quadratic form $f(x) = h(x)^{\top} \mathbf{Q} h(x)$,
+where $\mathbf{Q}$ is a real symmetric, positive semi-definite matrix.
+Using the spectral decomposition of
+$\mathbf{Q} = \sum_{i\in I} \mu_{i} u_{i}u_{i}^{\top}$, with eigenvalues
+$\mu_i$, eigenvectors $u_i$ and $I$ the rank of $\mathbf{Q}$, we can
+retrieve the sum-of-squares form of $f$ as $$\begin{align*}
+f(x) &= h(x)^{\top} \sum_{i\in I} \mu_{i} u_{i}u_{i}^{\top} h(x) = \sum_{i\in I} \mu_{i} (h(x)^{\top}u_{i})(u_{i}^{\top}h(x)) = \sum_{i\in I} (\sqrt{\mu_i}u_{i}^{\top}h(x))^{2}.
+\end{align*}$$ Even though such sum-of-squares representations allow to
+model and estimate non-negative functions everywhere, once again they
+may lack expressive power due to the restricted choice of the basis
+functions $h_i$, where mostly polynomial basis are used in the
+literature [@lasserre2009; @jaini2019; @mula2024].\
+To address this need, @marteauferey2020 recently introduced a new
+statistical learning problem based on the kernel sum-of-squares (kSoS)
+framework to estimate non-negative functions, bridging together the
+power of sum-of-squares representations and the expressive power of
+kernel methods. The latter gained popularity because they often offer
+convex optimization problems, perform well on small datasets, and
+provide great flexibility through the choice of the kernel function,
+allowing users to tackle problems across highly diverse data types. In
+their work, @marteauferey2020 interestingly show that kSoS models
+satisfy appreciated properties in learning problems: convexity of the
+loss function, universal approximation of non-negative functions (with
+universal kernels), finite-dimensional representation through a
+representer theorem as in standard kernel problems. In addition, kSoS
+models are also differentiable and integrable in closed form, which is
+useful for problems involving constrained outputs such as density
+estimation. Altogether, this makes kernel sum-of-squares a powerful
+framework for non-negative function estimation. As an illustration, it
+has since been used in various fields such as global optimization
+[@rudi2020], optimal transport [@vacher2024], uncertainty quantification
+[@allain2025; @allain2026] and statistical learning of convex functions
+[@muzellec2022], to name a few.\
+However, the initial kSoS proposal of @marteauferey2020, although
+influential, can only handle the estimation of one unknown kSoS
+function, or several ones but with the same RKHS. This means that
+statistical problems which involve additional unknown unconstrained
+functions, or several kSoS functions which should require different
+hyperparameters, can not be directly dealt with in this framework. If
+the former can be accommodated with through a sequential learning
+procedure, this is not satisfactory from a statistics perspective and
+almost surely leads to sub-optimal estimations. Less importantly from a
+theoretical point of view but fundamental in practice, in the original
+work of @marteauferey2020 the loss function is required to be bounded
+below, which limits the range of achievable learning problems, and the
+dual formulations corresponding to the statistical tasks illustrated in
+their experiments were omitted for conciseness.\
+In this paper, we thus aim at extending the representer theorem and dual
+formulation of @marteauferey2020, by allowing joint estimation of
+unconstrained functions and non-negative ones, but also give explicit
+and detailed dual formulations for several learning problems, both for
+reference and availability to the community. Our detailed contributions
+are as follows:
 
-This document, accompanied by the [customized GitHub repository](https://github.com/computorg/template-computo-python/), provides a template for writing contributions to **Computo** [@computo].
+- First, we introduce a generalized representer theorem for statistical
+  problems which involve both unconstrained and non-negative functions.
+  This encompasses for example heteroscedastic regression and
+  non-crossing multi-quantile regression, but also estimation of
+  conformal scores as in @allain2025 even though we do not illustrate
+  this problem here.
 
-::: {.callout-tip}
-## Note
-This document provides only the key formatting principles. For a detailed, step-by-step guide on preparing your article and submitting it to Computo, please consult the [guidelines for authors](https://computo-journal.org/site/guidelines-authors.html).
+- Second, we show that the resulting optimization problem admits a
+  convex dual formulation if the loss function is convex. This removes
+  the positive semi-definite constraints from the primal form and
+  considerably reduces the complexity of the optimization problem, which
+  drops from $\mathcal{O}(n^{3})$ to $\mathcal{O}(n)$ variables for the
+  dual formulation. By strong duality it recovers the primal solution
+  exactly, while scaling much more easily with respect to the dataset
+  size. Besides, all our results are given in a general potentially
+  rank-deficient setting, which allows to consider standard low-rank
+  approximations that can be smoothly incorporated in both primal and
+  dual formulations. This pushes the applicability of kSoS problems to
+  even larger scales.
+
+- Third, we derive the explicit dual formulas for the kSoS examples
+  studied by @marteauferey2020, namely density estimation,
+  heteroscedastic regression with known mean function and non-crossing
+  multi-quantile regression with known median function. For each of them
+  we provide numerical illustrations of what can be expected from kSoS
+  models in practice.
+
+- Fourth, we introduce two new case studies in which we jointly learn a
+  real-valued function and kSoS functions: heteroscedastic regression
+  where both mean and variance functions are estimated, and non-crossing
+  multi-quantile regression where the median function is learned jointly
+  along with the quantile functions. Thanks to our general representer
+  theorem, we show that these two problems admit a finite-dimensional
+  representation, and we also derive their dual formulation explicitly.
+  In order to showcase the potential of such framework, we finally
+  conduct several illustrative numerical experiments.
+
+Throughout this paper, we will thus evaluate the initial kSoS approach
+or our extension on several problems. However, it is important to
+clarify the primary objective of the empirical illustrations presented
+in this work. Our goal is not to position kSoS methods as the
+state-of-the-art solution that outperforms established competitors
+across a competitive benchmark. Instead, these examples are meant to
+highlight the elegance, structural flexibility, and highly efficient
+dual optimization problems of the kSoS framework. By demonstrating its
+natural adaptability to diverse statistical problems, our intent here is
+to advocate for its broader adoption and inspire further exploration of
+its potential within the community.\
+The paper is organized as follows. In @sec-kernel-sum-of-squares, we
+begin by introducing the kSoS framework developed by @marteauferey2020.
+We follow in @sec-generalized-representer-theorem by generalizing this
+framework to jointly learn RKHS and kSoS functions, and show that a
+finite-dimensional representation still holds through a new representer
+theorem. We then prove that an associated dual formulation can still be
+derived, and that kernel low-rank approximation can be used to handle
+large scale estimation problems. Then, @sec-kSoS-problems is dedicated
+to several practical learning problems. For completeness, in
+@sec-subsec-kSoS-only-problems we first derive explicitly the dual
+formulations for three kSoS problems studied before, namely density
+estimation, heteroscedastic regression and non-crossing multi-quantile
+regression. But in @sec-subsec-joint-learning-problems, we introduce two
+new statistical problems in which we learn concurrently an unconstrained
+function in a RKHS together with kSoS functions. These two problems are
+heteroscedastic regression with unknown mean and variance functions, and
+non-crossing multi-quantile regression problem with unknown median and
+quantile functions.
+
+# Kernel sum-of-squares {#sec-kernel-sum-of-squares}
+
+Let us begin by introducing the kSoS framework developed by
+@marteauferey2020. Inspired by previous work on sum-of-squares, they
+proposed to model a non-negative function using a quadratic form which
+involves functions in a reproducing kernel Hilbert space (RKHS). Before
+providing the definition, we first introduce the necessary notations. We
+will write a RKHS $\mathcal{H}$ with associated feature map
+$\phi\colon \mathcal{X} \longrightarrow \mathcal{H}$ and kernel $k$. We
+denote by $\mathcal{S}(\mathcal{H})$ the set of bounded Hermitian linear
+operators from $\mathcal{H}$ to $\mathcal{H}$ and by
+$\mathcal{S}_{+}(\mathcal{H})$ those that are positive semi-definite
+(PSD). We also write
+$\mathbb{S}^{r} := \mathbb{S}\left(\mathbb{R}^{r\times r}\right)$ the
+set of real and symmetric matrices of size $r$, and
+$\mathbb{S}_{+}^{r} := \mathbb{S}_{+}\left(\mathbb{R}^{r\times r}\right)$
+the set of real, symmetric and PSD matrices of size $r$. A kernel
+sum-of-squares function is defined for each $x \in \mathcal{X}$ as the
+quadratic form
+$$f_{\mathcal{A}}(x) = \langle \phi(x), \mathcal{A}\phi(x)\rangle_{\mathcal{H}}, \quad \mathcal{A} \in \mathcal{S}_{+}(\mathcal{H}).$$ {#eq-kSoS-definition}
+Because $\mathcal{A}$ is a positive semi-definite operator, it admits a
+spectral decomposion given by
+$\mathcal{A} = \sum_{i\geq 0}\mu_{i}(u_{i}\otimes u_{i})$ where
+$\mu_{i} > 0$ are the eigenvalues and $u_{i} \in \mathcal{H}$ the
+eigenfunctions of $\mathcal{A}$. Using this decomposition, the function
+$f_{\mathcal{A}}$ writes as $$\begin{align*}
+f_{\mathcal{A}} (x) = \sum_{i\geq 0}\mu_{i} \langle \phi (x), (u_{i} \otimes u_{i}) \phi (x) \rangle_{\mathcal{H}}
+= \sum_{i\geq 0}\mu_{i} \langle \phi (x), u_{i} \langle u_{i}, \phi (x) \rangle_{\mathcal{H}} \rangle_{\mathcal{H}}
+= \sum_{i\geq 0}(\sqrt{\mu_{i}} \langle u_{i}, \phi(x) \rangle_{\mathcal{H}})^{2}.
+\end{align*}$$ This simple derivation shows that the quadratic form in
+@eq-kSoS-definition actually corresponds to a sum-of-squares function,
+and is thus non-negative everywhere. Interestingly, such a kSoS function
+is entirely characterized by its associated positive semi-definite
+operator $\mathcal{A}$.\
+With this definition, we are now ready to discuss statistical learning
+tasks where we want to estimate a non-negative function
+$f_{\mathcal{A}}$, which is equivalent to estimate its associated
+operator $\mathcal{A}$. @marteauferey2020 introduced a regularized
+learning problem, where the unknown optimization variable is a kSoS
+function as defined in @eq-kSoS-definition. Considering a training
+sample of features $x_{1}, \ldots, x_{n}$, a loss function $L$ defined
+on the point-wise function evaluations at the training points and a
+regularization function $\Omega$ on the unknown operator, their problem
+writes as:
+$$\inf_{\mathcal{A}\in\mathcal{S}_{+}(\mathcal{H})} L(f_{\mathcal{A}}(x_1), \ldots, f_{\mathcal{A}}(x_n)) + \Omega(\mathcal{A}).$$ {#eq-ksos-regularized-learning-problem}
+We can observe the similarity with standard kernel problems, where the
+traditional optimization variable $f \in \mathcal{H}$ is replaced with
+$\mathcal{A}\in\mathcal{S}_{+}(\mathcal{H})$. As noted by
+@marteauferey2020, the existence and uniqueness of solutions in Problem
+-@eq-ksos-regularized-learning-problem heavily depend on the shape of
+the regularization function. In their original paper, they mainly focus
+on the elastic-net regularization given by
+$$\Omega(\mathcal{A}) = \lambda_{1} \lVert\mathcal{A}\rVert_{\star}+\lambda_{2}\lVert\mathcal{A}\rVert_{F}^{2},$$ {#eq-elastic-net-regularization}
+but their theoretical result actually holds for a wider class of
+regularization functions, which we will introduce and discuss later.\
+The main result in @marteauferey2020 is the following representer
+theorem, which states that Problem
+-@eq-ksos-regularized-learning-problem admits a solution and that this
+solution is finite-dimensional.
+
+::: {#thm-representant-marteauferey .theorem}
+Let $L$ be a lower semi-continuous and bounded below function and
+$\Omega$ defined as in @eq-elastic-net-regularization. The learning
+problem in @eq-ksos-regularized-learning-problem admits a solution
+$\mathcal{A}^{\star}$ writing as:
+$$\mathcal{A}^{\star} = \sum_{i,j=1}^{n}\mathbf{B}_{ij}\phi(x_i)\phi(x_j)^{\top} \; \text{for some matrix } \mathbf{B}\in\mathbb{S}_{+}^{n},$$
+with
+$f_{\mathcal{A}^\star}(x) = \sum_{i,j=1}^{n}\mathbf{B}_{ij}k(x, x_i)k(x, x_j)$.
 :::
 
-## Quarto
+Crucially, the estimation of the infinite-dimensional operator
+$\mathcal{A}$ is replaced with the estimation of a PSD matrix
+$\mathbf{B}$ of size $n\times n$. As an illustration of this representer
+theorem, @marteauferey2020 present two learning problems,
+heteroscedastic regression and non-crossing multi-quantiles regression.
+The former is inherently a non-negative function estimation task since
+the goal is to learn the variance function, while the latter comes from
+a smart reparameterization trick: quantile functions are modelled as
+non-negative increments around the median function to ensure
+non-crossing, and these increments are precisely the non-negative
+functions which are learned. In addition, their original work was also
+generalized later for global optimization [@rudi2020] or to learn convex
+functions [@muzellec2022].\
+Unfortunately, although powerful and ground-breaking for non-negative
+function estimation, this theorem does not apply to all practical
+scenarios. First, some statistical problems necessitate to learn, in
+addition of a positive function, an unconstrained general-valued
+function. For instance in heteroscedastic regression, we may want to
+learn the variance as a non-negative function and the mean as a general
+real-valued function. Similarly, in the non-crossing multi-quantile
+setting of @marteauferey2020, the median function may be learned
+simultaneously but without non-negativity constraints. This practical
+situation also arises when learning a conformal score function as was
+done in the work of @allain2025. Second, other statistical problems
+require to learn multiple kSoS functions at once: this has been done in
+Theorem 6 from @marteauferey2020, which encompasses their example on
+multi-quantile regression. But this extension only considers multiple
+kSoS functions defined with operators acting on the same RKHS. Even if
+in practice we may use the same kernel for all functions, it is frequent
+to model them with different kernel lengthscales for flexibility, which
+ultimately yields different RKHS: the original setting introduced by
+@marteauferey2020 thus does not apply here. To handle those two
+practical situations, there is the need to extend
+@thm-representant-marteauferey.\
+Interestingly, preliminary attempts have been proposed in previous work:
+in the context of conformal score learning, @allain2025 proved a
+representer theorem for one RKHS function and one kSoS function for a
+very specific loss function, while @vacher2024 also considered a problem
+with two RKHS functions and one kSoS function for a loss related to
+optimal transport. In parallel, @allain2026 proved a representer theorem
+for a general loss function and multiple kSoS functions, each with its
+own kernel, but without additional unconstrained functions. In the next
+section, we thus unify all settings into a single framework, showing
+that it is possible to learn $p$ real-valued functions, each in their
+own RKHS, alongside $q$ kSoS functions with operators defined on
+different RHKS as well.
 
-[Quarto](https://quarto.org/) is a versatile formatting system for authoring documents integrating markdown, LaTeX and code blocks interpreted either via Jupyter or Knitr (thus supporting Python, R and Julia). It relies on the [Pandoc](https://pandoc.org/MANUAL.html) document converter.
+# Generalized representer theorem {#sec-generalized-representer-theorem}
 
-## Requirements
+Our main result is @thm-general-representer-theorem below, which follows
+the generalization of @thm-representant-marteauferey to multiple kSoS
+functions proposed by @allain2026. Let us first start with some
+notations.\
+We consider a collection of $p$ RKHS
+$\mathcal{H}^{g}_{l},\, l=1,\ldots,p$ and $q$ RKHS
+$\mathcal{H}^{f}_{s},\, s=1,\ldots,q$. To each RKHS
+$\mathcal{H}^{g}_{l}$ and $\mathcal{H}^{f}_{s}$ is associated a unique
+kernel $k^{g}_{l}$ and $k^{f}_{s}$ with feature map $\phi^{g}_{l}$ and
+$\phi^{f}_{s}$, respectively. For our learning problem, these function
+spaces allow us to introduce our key objects of interest:
 
-You need [quarto](https://quarto.org/) installed on your system and the [Computo extension](https://github.com/computorg/computo-quarto-extension) to prepare your document. For the latter, once quarto is installed, run the following to install the extension in the current directory (it creates a `_extension` directory which is ignored by git thanks to `.gitignore` by default):
+- The $p$ *unknown* real-valued functions
+  $g_{l}:\; \mathcal{X} \to \mathbb{R}$ in a RKHS $\mathcal{H}^{g}_{l}$
+  for $l=1,\ldots,p$
 
-```.bash
-quarto add computorg/computo-quarto-extension
-```
+- The $q$ *unknown* kSoS functions
+  $f_{\mathcal{A}_{s}}:\; \mathcal{X} \to \mathbb{R}^{+}$ parameterized
+  by a positive semi-definite operator
+  $\mathcal{A}_{s}\in\mathcal{S}_{+}(\mathcal{H}^{f}_{s})$ defined on a
+  RKHS $\mathcal{H}^{f}_{s}$ with
+  $f_{\mathcal{A}_{s}}(x) = \langle\phi^{f}_{s}(x), \mathcal{A}_{s}\phi^{f}_{s}(x)\rangle_{\mathcal{H}^{f}_{s}}$
+  for $s=1,\ldots,q$
 
-[`Python`](https://www.python.org/) and [`Jupyter`](https://jupyter.org/install) must be installed on your computer.
+- The collection of RKHS functions
+  $g:=(g_1,\ldots,g_p)\in \mathcal{K}^{g}(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}):= \mathcal{H}^{g}_{1}\times\dots\times\mathcal{H}^{g}_{p}$
 
-# Formatting
+- The collection of operators
+  $\mathcal{A}:=(\mathcal{A}_{1},\dots,\mathcal{A}_{q})\in \mathcal{K}^{f}(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q}):= \mathcal{S}_{+}(\mathcal{H}^{f}_{1})\times\dots\times\mathcal{S}_{+}(\mathcal{H}^{f}_{q})$
 
-This section covers basic formatting guidelines for quarto documents.
+- The collection of RKHS function evaluations
+  $g(x):=(g_1(x),\ldots,g_p(x))\in \mathbb{R}^{p}, \; \forall x\in\mathcal{X}$
 
-To render a document, run `quarto render`. By default, both PDF and HTML documents are generated:
+- The collection of kSoS function evaluations
+  $f_{\mathcal{A}}(x) := f_{\mathcal{A}_1, \ldots, \mathcal{A}_q}(x) = \left(f_{\mathcal{A}_1}(x), \ldots, f_{\mathcal{A}_q}(x)\right) \in \mathbb{R}_{+}^{q}, \; \forall x\in\mathcal{X}$
 
-```.bash
-quarto render # renders both HTML and PDF
-```
+Finally, for a training sample $x_1,\ldots,x_n$ of features, we denote
+$\mathbf{K}^{g}_l$ the kernel matrix with elements
+$[\mathbf{K}^{g}_l]_{ij}=k^{g}_{l}(x_i,x_j)$ and
+$\boldsymbol{k}^{g}_l(x)$ the column vector defined by
+$$\begin{equation*}
+\boldsymbol{k}^{g}_l(x) = (k^{g}_{l}(x,x_1),\ldots,k^{g}_{l}(x,x_n))^\top
+\end{equation*}$$ for any $x\in\mathcal{X}$. Similarly, we introduce
+$\mathbf{K}^{f}_s$, $\boldsymbol{k}^{f}_s(x)$ and further consider a
+decomposition $\mathbf{K}^{f}_s=\mathbf{V}_s^\top \mathbf{V}_s$ with
+$\mathbf{V}_s\in \mathbb{R}^{r_{s} \times n}$ where $r_{s}$ is the rank
+of $\mathbf{K}^{f}_s$, and the empirical feature map
+$$\boldsymbol{\Phi}_{s}(x) = (\mathbf{V}_{s}\mathbf{V}^{\top}_{s})^{-1}\mathbf{V}_{s}\boldsymbol{k}^{f}_{s}(x).$$ {#eq-empirical-feature-map}
 
-::: {.callout-tip}
-## Note
+With these notations, we now introduce a new statistical learning
+problem for both RKHS and kSoS functions which extends Problem
+-@eq-ksos-regularized-learning-problem. We consider a training sample of
+features $x_1, \ldots, x_n$, a new loss function $L$ which also
+incorporates point-wise evaluations of the RKHS functions, and a
+regularization broken down into two parts: the usual kSoS regularizer of
+@marteauferey2020 plus a regularizer for each RKHS function. Our
+learning problem writes as:
+$$\inf_{\substack{g \in \mathcal{K}^{g}(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \\
+\mathcal{A}\in \mathcal{K}^{f}(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})}} L\left(g(x_1),\ldots,g(x_n),
+f_{\mathcal{A}}(x_1),\ldots,f_{\mathcal{A}}(x_n)\right)
++ \sum_{l=1}^{p}R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big) 
++ \sum_{s=1}^{q}\Omega_{s}(\mathcal{A}_{s}).$$ {#eq-rkhs-and-ksos-regularized-learning-problem}
+The kSoS regularizers $\Omega_{s}$ are assumed to satisfy the same broad
+assumption given by @marteauferey2020, which we recall in @cnj-omega
+below. For the RKHS functions, we consider the usual RKHS-norm
+regularization $R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big)$
+[@scholkopf2002] with the $R_l$ functions satisfying @cnj-R.
 
-To check the syntax of the formatting below, you can use the `</> source` button at the top right of this document.
+::: {#cnj-omega .assumption}
+For each $s=1,\ldots,q$, $\Omega_{s}$ writes as $$\begin{equation*}
+\Omega_{s}(\mathcal{A}_{s})=
+\begin{cases}
+\mathop{\mathrm{Tr}}\big(h_{s}(\mathcal{A}_{s})\big)=\sum_{k}h_{s}(\sigma_{k})
+& \text{if } \mathcal{A}_{s}=U\,\mathrm{Diag}(\sigma)\,U^{\top},\ \sum_{k}h_{s}(\sigma_{k})<+\infty,\\
++\infty & \text{otherwise},
+\end{cases}
+\end{equation*}$$ where $h_{s}\colon\mathbb{R}\to\mathbb{R}_{+}$ is
+lower semi-continuous, non-decreasing on $\mathbb{R}_{+}$ with
+$h_{s}(0)=0$, and such that $h_{s}(\sigma)\to+\infty$ as
+$|\sigma|\to+\infty$.
 :::
 
-## Basic markdown formatting
-
-**Bold text** or _italic_
-
-- This is a list
-- With more elements
-- It isn't numbered.
-
-But we can also do a numbered list
-
-1. This is my first item
-2. This is my second item
-3. This is my third item
-
-## Mathematics
-
-### Mathematical formulae
-
-[LaTeX](https://www.latex-project.org/) code is natively supported[^lualatex], which makes it possible to use mathematical formulae:
-
-[^lualatex]: We use [lualatex](https://lualatex.org/) for this purpose.
-
-$$
-f(x_1, \dots, x_n; \mu, \sigma^2) =
-\frac{1}{\sigma \sqrt{2\pi}} \exp{\left(- \frac{1}{2\sigma^2}\sum_{i=1}^n(x_i - \mu)^2\right)}
-$$
-
-It is also possible to cross-reference an equation, see @eq-mylabel:
-
-$$
-\begin{aligned}
-D_{x_N} & = \frac12
-\left[\begin{array}{cc}
-x_L^\top & x_N^\top \end{array}\right] \,
-\left[\begin{array}{cc}  L_L & B \\ B^\top & L_N \end{array}\right] \,
-\left[\begin{array}{c}
-x_L \\ x_N \end{array}\right] \\
-& = \frac12 (x_L^\top L_L x_L + 2 x_N^\top B^\top x_L + x_N^\top L_N x_N),
-\end{aligned}
-$$ {#eq-mylabel}
-
-### Theorems and other amsthem-like environments
-
-Quarto includes a nice support for theorems, with predefined prefix labels for theorems, lemmas, proposition, etc. see [this page](https://quarto.org/docs/authoring/cross-references.html#theorems-and-proofs). Here is a simple example:
-
-::: {#thm-slln}
-## Strong law of large numbers
-
-The sample average converges almost surely to the expected value:
-
-$$\overline{X}_n\ \xrightarrow{\text{a.s.}}\ \mu \qquad\textrm{when}\ n \to \infty.$$
+::: {#cnj-R .assumption}
+For each $l=1,\ldots,p$, $R_{l}\colon[0, \infty ) \to\mathbb{R}_{+}$ is
+an increasing, lower semi-continuous and coercive function.
 :::
 
-See @thm-slln.
+Our generalized representer theorem states that Problem
+-@eq-rkhs-and-ksos-regularized-learning-problem admits a solution and
+that this solution is finite-dimensional. Compared to
+@thm-representant-marteauferey, observe that we do not require the loss
+to be bounded below, but only the complete objective function to be
+coercive, which broadens the applicability of the theorem. Obviously our
+theorem encompasses @thm-representant-marteauferey, because lower
+semi-continuous functions which are bounded below are automatically
+coercive.
 
-## Python Code
+::: {#thm-general-representer-theorem .theorem}
+Let $L$ be a a lower semi-continuous loss function and regularizers
+$R_{l}$ satisfying @cnj-R and $\Omega_{s}$ satisfying @cnj-omega. Then,
+under the assumption that the objective function is coercive, Problem
+-@eq-rkhs-and-ksos-regularized-learning-problem admits a solution
+$(g^{\star},\mathcal{A}^{\star})$ with the finite-dimensional
+representation $$\begin{aligned}
+g_{l}^{\star}(x) = \sum_{i=1}^{n}\boldsymbol{\gamma}_{li}\,k_{l}^{g}(x,x_{i}),\qquad 
+& \mathcal{A}_{s}^{\star} = \sum_{i,j=1}^{n}[\mathbf{B}_{s}]_{ij}\,\phi^{f}_{s}(x_{i})\phi^{f}_{s}(x_{j})^{\top}
+\end{aligned}$$ {#eq-solution-parameters} such that
+$f_{\mathcal{A}_{s}^{\star}}$ can be written as
+$$f_{\mathcal{A}_{s}^{\star}}(x) =\sum_{i,j=1}^{n}[\mathbf{B}_{s}]_{ij}\,k_{s}^{f}(x_{i},x)\,k_{s}^{f}(x_{j},x)$$ {#eq-solution-functions}
+for $p$ vectors $\boldsymbol{\gamma}_{l}\in\mathbb{R}^{n}$,
+$l=1,\ldots,p$ and $q$ matrices $\mathbf{B}_{s}\in\mathbb{S}^{n}_{+}$,
+$s=1,\ldots,q$.
+:::
 
-Quarto uses either Jupyter or knitr to render code chunks. This can be triggered in the yaml header. In this tutorial, we use `Jupyter` (`Python` and `Jupyter` must be installed on your computer).
+The proof is given in @sec-apx-rep_th and follows the main steps of
+representer theorems in the literature. We first show that the objective
+function does not increase after projection in the finite-dimensional
+subspace spanned by the data. Then, we show that if the minimum exists
+it must have bounded norm, and then conclude by showing that such a
+minimum exists. Remark that our proof differs from the scheme proposed
+by both @allain2025 and @vacher2024: in their work they first show that
+a minimum of the infinite-dimensional problem exists, and then use a
+block-wise argument for the representer theorem (fix all functions but
+one, then previous representer theorems apply, and iterate over the
+functions). We prefer here the projection argument because it delivers
+existence and the representer form simultaneously.\
+The outcome of this representer theorem is a primal formulation with $p$
+vectors of size $n$ and $q$ PSD matrices of size $n\times n$ to learn.
+Clearly this primal formulation is easy to implement and solve using
+off-the-shelf solvers such as `SCS`
+[@odonoghue2021; @odonoghue2023software]. But of practical interest is
+also the following equivalent finite-dimensional reparameterization
+based on the empirical feature map, which was proposed in
+@marteauferey2020. Indeed, this alternative parameterization was shown
+to be more computationally efficient by @allain2025 while still relying
+on easy-to-use semi-definite program (SDP) solvers, but it also paves
+the way for kernel low-rank approximation techniques which we will
+discuss later. More precisely, define
+$$\tilde{f}_{\mathbf{A}_{s}}(x)=\boldsymbol{\Phi}_s(x)^\top \mathbf{A}_s \, \boldsymbol{\Phi}_s(x)$$ {#eq-f_tilde}
+for $s=1,\ldots,q$, where the matrix $\mathbf{A}_{s}$ is of size $r_s$,
+the rank of $\mathbf{K}^{f}_s$, since the empirical feature map
+$\boldsymbol{\Phi}_{s}(x)$ is of size $r_s$. With these notations, the
+following proposition shows that we obtain the same solution if we
+optimize the PSD matrices $\mathbf{A}_1,\ldots,\mathbf{A}_q$ instead of
+$\mathbf{B}_1,\ldots,\mathbf{B}_q$.
 
-``` yaml
----
-title: "My Document"
-author: "Jane Doe"
-jupyter: python3
----
-```
+::: {#prp-formulation-A .proposition}
+Under the assumptions of @thm-general-representer-theorem, the following
+problem has at least one solution, which is unique if
+$g_{l}\mapsto R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big)$,
+$\Omega_{s}$ are strongly convex for all $1\leq l \leq p$ and
+$1\leq s \leq q$ and $L$ is convex: $$\begin{aligned}
+\inf_{\substack{\boldsymbol{\gamma}_1,\ldots,\boldsymbol{\gamma}_p \in \mathbb{R}^n\\ \mathbf{A}_{1}\in\mathbb{S}_{+}^{r_1}, \ldots, \mathbf{A}_{q}\in\mathbb{S}_{+}^{r_q}}} & L\left((\boldsymbol{k}^{g}_{l}(x_i)^{\top}\boldsymbol{\gamma}_{l})_{1\leq i \leq n,\, 1\leq l \leq p},\,(\tilde{f}_{\mathbf{A}_{s}}(x_i))_{1\leq i \leq n,\, 1\leq s \leq q}\right)\\
+&+ \sum_{l=1}^{p}R_{l}\left(\sqrt{\boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l} \right) + \sum_{s=1}^{q}\Omega_{s}(\mathbf{A}_{s}).
+\end{aligned}$$ {#eq-thm-rep-formulation-A} Moreover, for any given
+solution
+$\mathbf{A}_{1}^{\star}\in\mathbb{S}_{+}^{r_1}, \ldots, \mathbf{A}_{q}^{\star}\in\mathbb{S}_{+}^{r_q}$
+of Problem -@eq-thm-rep-formulation-A, the functions
+$(\tilde{f}_{\mathbf{A}_{s}^{\star}})_{1\leq s\leq q}$ are minimizers of
+Problem -@eq-rkhs-and-ksos-regularized-learning-problem.
+:::
 
-`python` code chunks may be embedded as follows:
+::: proof
+The proof is exactly the same as in @allain2026 [Proposition A.6], since
+the new parameterization does not involve functions $g_l$.
+:::
 
-```{python python-code}
+In case of rank-deficient kernels, where $r_s<n$, this
+reparameterization allows to limit the size of the optimization
+variables. As mentioned before, it was also shown to be more efficient
+from a numerical perspective in the extensive experiments of
+@allain2025. In practice we thus heavily recommend to solve Problem
+-@eq-thm-rep-formulation-A.\
+However, even with this reformulation, the finite-dimensional problem is
+still a semi-definite program, with unknown variables of size
+$n\times n$ or $r_s \times r_s$. In order to reduce the number of
+optimization variables and break free from the PSD constraints, we now
+propose to adapt the dual formulation proposed by @marteauferey2020 for
+@thm-representant-marteauferey to our generalized representer theorem,
+which holds when the loss function $L$ is convex. We show that Fenchel
+duality [@borwein2006 Theorem 3.3.5] applies to Problem
+-@eq-thm-rep-formulation-A, when considering specific regularizers.
+Specifically, for RKHS functions we consider the ridge regularization
+$$R_l(u)=\lambda^{g}_{l} u^2,$$ {#eq-ridge-regularization} which
+satisfies @cnj-R. For kSoS functions, we consider the same regularizer
+as @marteauferey2020, the elastic-net regularizer
+$\Omega_s(\mathcal{A}) = \lambda^{f}_{s1} \lVert\mathcal{A}\rVert_{\star}+\lambda^{f}_{s2}\lVert\mathcal{A}\rVert_{F}^{2}$,
+which satisfies @cnj-omega with functions
+$h_{s}(z) = \lambda_{s1}^{f}\lvert z \rvert + \lambda_{s2}^{f} z^2$.
+
+::: {#thm-general-dual-formulation .theorem}
+Assume $L$ is a lower semi-continuous proper convex function and $R_l$
+and $\Omega_s$ are as defined above with
+$\lambda^{g}_l,\lambda^{f}_{s2} > 0$ for all $l=1,\ldots,p$ and
+$s=1,\ldots,q$. Assume further that there exist
+$\boldsymbol{\gamma}^0_l\in\mathbb{R}^n,\, \mathbf{A}^0_s\in\mathbb{S}_{+}^{r_s}$
+such that $L$ is continuous in
+$(\boldsymbol{k}^{g}_{l}(x_i)^{\top}\boldsymbol{\gamma}^0_{l})_{1\leq i \leq n,\, 1\leq l \leq p}$
+and
+$(\tilde{f}_{\mathbf{A}^0_{s}}(x_i))_{1\leq i \leq n,\, 1\leq s \leq q}$.
+Then Problem -@eq-thm-rep-formulation-A has the following dual
+formulation: $$\begin{aligned}
+\sup_{\substack{\boldsymbol{\alpha}_{1}, \ldots, \boldsymbol{\alpha}_{q}\in\mathbb{R}^n\\ \boldsymbol{\beta}_{1},\ldots,\boldsymbol{\beta}_{p} \in \mathbb{R}^n}} & -L^{\star}((-\boldsymbol{\beta}_{l})_{1\leq l \leq p},(-\boldsymbol{\alpha}_{s})_{1\leq s \leq q}) - \sum_{l=1}^p \frac{1}{4\lambda^{g}_{l}} \boldsymbol{\beta}_{l}^{\top} \mathbf{K}^{g}_{l} \boldsymbol{\beta}_{l} \\
+& - \sum_{s=1}^q \frac{1}{4\lambda^{f}_{s2}} \left\lVert \left[\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_+\right\rVert_F^2
+\end{aligned}$$ {#eq-general_dual} where $L^{\star}$ is the Fenchel
+conjugate of $L$ and $[\mathbf{M}]_+$ denotes the positive part of a
+symmetric matrix $\mathbf{M}\in\mathbb{S}^{r}$, i.e.
+$[\mathbf{M}]_+=\mathbf{Q}\mathbf{\Lambda}_{+}\mathbf{Q}^{\top}$ if
+$\mathbf{M}$ has the eigendecomposition
+$\mathbf{M}=\mathbf{Q}\mathbf{\Lambda}\mathbf{Q}^{\top}$ and
+$\mathbf{\Lambda}_{+}$ is a diagonal matrix with elements
+$[\mathbf{\Lambda}_{+}]_{ii}=\max([\mathbf{\Lambda}]_{ii},0)$ for
+$i=1,\ldots,r$. Moreover, if
+$\boldsymbol{\alpha}_{1}^{\star}, \ldots, \boldsymbol{\alpha}_{q}^{\star},\boldsymbol{\beta}_{1}^{\star},\ldots,\boldsymbol{\beta}_{p}^{\star}\in\mathbb{R}^n$
+is a solution of Problem -@eq-general_dual, a solution of Problem
+-@eq-rkhs-and-ksos-regularized-learning-problem can be retrieved as
+$$g^{\star}_l(x) = \frac{1}{2\lambda^{g}_{l}}\boldsymbol{k}^{g}_{l}(x)^{\top} \boldsymbol{\beta}_{l}^{\star},$$ {#eq-recover-g}
+$$f_{\mathcal{A}^{\star}_{s}}(x) = \tilde{f}_{\mathbf{A}^{\star}_{s}}(x),\; \mathbf{A}^{\star}_{s} = \frac{1}{2\lambda^{f}_{s2}}\left[\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_{+}.$$ {#eq-recover-A}
+:::
+
+The proof can be found in @sec-apx-dual and relies on Theorem 3.3.5 from
+@borwein2006, for which we also derive the Fenchel conjugate of the
+regularization functions. @thm-general-dual-formulation allows to
+transform the primal problem with $q$ positive semi-definite constraints
+and $pn+qn^{2}$ variables, into an optimization problem with only
+$(p+q)n$ variables and no positive semi-definite constraint. If the dual
+formulation is differentiable, as in all the examples we study here,
+highly efficient off-the-shelf solvers can be used such as `L-BFGS`
+[@liu1989] or accelerated gradient descent (`AGD`) methods
+[@OJMO2022; @truong2021]. They only require the gradient of the dual
+objective function: the gradient of the regularizer conjugates is
+available in closed-form, and the gradient of the conjugate loss
+function is tractable in many instances, see @sec-apx-learning-problems
+for examples. When the loss function conjugate is not smooth or when it
+involves simple non-linear constraints, note that `AGD` methods can be
+adapted, such as proximal or projected variants.\
+This dual formulation, thanks to its linear scaling in the optimization
+variables, makes it possible to consider larger sample size problems
+than the primal, up to a few thousand samples in our experience. To
+scale even further, interestingly our statistical learning problem can
+also benefit from kernel low-rank approximation, significantly speeding
+up computation when the data exhibit a low-rank structure. Indeed,
+recall that @eq-empirical-feature-map gives the empirical feature map
+for a rank-deficient kernel matrix $\mathbf{K}^{f}_s$, while it
+simplifies to
+$\boldsymbol{\Phi}_{s}(x)=\mathbf{V}^{-\top}_{s}\boldsymbol{k}^{f}_{s}(x)$
+when the kernel matrix is full rank, that is when $r_s = n$. The idea is
+that even in cases where the kernel matrix is inherently full rank, we
+can replace it with a low-rank approximation to accelerate computations
+by using @eq-empirical-feature-map. To compute such low-rank kernel
+approximation, we can rely on the numerous methods available in the
+kernel literature, such as Nyström [@williams2000], Random Fourier
+Features [@rahimi2007] or randomized SVD [@halko2011]. Taking advantage
+of such low-rank approximation has major practical benefits. First, for
+the primal formulation given in Problem -@eq-thm-rep-formulation-A, as
+previously observed this reduces the complexity of the SDP problem from
+$q$ PSD matrices all of size $n\times n$ to $q$ matrices each of small
+size $r_s \times r_s$ for $1\leq s \leq q$. Second, for the dual
+formulation, although the number of optimization variables remains the
+same, computing the positive part of a matrix actually now applies to
+matrices of size $r_s \times r_s$ for $1\leq s \leq q$ instead of $q$
+matrices of size $n \times n$, thereby reducing the complexity of each
+dual iteration from $\mathcal{O}(n^3)$ to
+$\mathcal{O}(\max_{1\leq s \leq q}(r_s)^3)$, since the positive part
+involves an eigenvalue decomposition. This leads to significant
+computational savings in practice, with almost no approximation error if
+the low-rank approximations are carefully designed, as we illustrate in
+our numerical experiments below. This strategy also proved successful in
+@vacher2024 and @allain2026. As future work, we plan to quantify the
+error incurred by this type of approximation in the kSoS framework,
+similarly to the bounds which have been obtained in the kernel
+literature, see e.g. @yang2012.\
+To summarize, in this section we introduced a new statistical learning
+problem involving both RKHS and kSoS functions, defined on potentially
+different functions spaces, extending @thm-representant-marteauferey.
+Following a reparametrization, we also showed that, for specific
+regularizers and a convex loss function, our primal problem admits a
+convex dual formulation, which reduces the number of optimization
+variables and removes any positive semi-definite constraints. Our
+results also easily accommodate for kernel low-rank approximations,
+which can help both the primal and dual formulation to scale to much
+larger datasets. In the next section, we finally give several
+illustrations of kSoS statistical learning problems.
+
+# Illustration of kSoS on statistical learning problems {#sec-kSoS-problems}
+
+In this section, we illustrate the relevance of kernel sum-of-squares
+statistical learning through several practical applications. First, in
+@sec-subsec-kSoS-only-problems, we revisit three examples already
+introduced by @marteauferey2020 that rely solely on unknown kSoS
+functions: heteroscedastic regression with a known mean, non-crossing
+multi-quantile regression with a known median, and density estimation.
+To ensure completeness and facilitate practical implementation, we
+explicitly derive the dual formulations for these examples, expanding
+upon the original paper of @marteauferey2020. While the first two
+regression problems are treated sequentially,
+@sec-subsec-joint-learning-problems extends this framework to joint
+learning scenarios. Specifically, we propose to jointly estimate the
+mean in the heteroscedastic regression model and the median in the
+multi-quantile regression model.\
+
+In all experiments, we exclusively use the Matérn $5/2$ kernel,
+parameterized by lengthscales $\theta^{(\cdot)}$. Hyperparameter tuning
+is systematically performed using a $5$-fold cross-validation scheme:
+this applies to kSoS-only and joint learning examples, but also to the
+pre-computed mean (via kernel ridge regression) and median (via kernel
+quantile regression) functions discussed in
+@sec-subsec-kSoS-only-problems. We refer the reader to Section
+@sec-apx-exps for all the details and results of the cross-validation
+procedure on each task. In addition, all optimization problems are
+solved with a low-rank approximation for the kernel matrices
+$\mathbf{K}_{s}^{f}$. Specifically, we define
+$\mathbf{V}_{s}=\boldsymbol{\Sigma}_{s}^{1/2} \mathbf{U}_{s}^{\top}$
+where $\boldsymbol{\Sigma}_{s}\in\mathbb{R}^{r_{s}\times r_{s}}$ is
+diagonal and $\mathbf{U}_{s}\in\mathbb{R}^{n\times r_{s}}$ such that
+$\mathbf{U}_{s}^{\top}\mathbf{U}_{s}=\mathbf{I}_{r_{s}}$ is semi-unitary
+obtained through the economy eigendecomposition
+$\mathbf{K}^{f}_{s}=\mathbf{U}_{s}\boldsymbol{\Sigma}_{s}\mathbf{U}_{s}^{\top}$,
+and the rank is chosen in order to guarantee a reconstruction error less
+than $99.5\%$. In practice, this eigendecomposition is obtained through
+a singular value decomposition.
+
+## kSoS-only learning problems {#sec-subsec-kSoS-only-problems}
+
+In this section we focus ourselves on kSoS-only problems and give the
+detailed dual formulations for the three original examples considered by
+@marteauferey2020.
+
+### Heteroscedastic regression with known mean {#sec-subsec-kSoS-only-hetregr}
+
+Assume that we have i.i.d. data $(x_i,y_i)_{i=1,\ldots,n}$ from the
+heteroscedastic Gaussian noise model $$\begin{equation*}
+y_i \sim \mathcal{N}(\mu(x_i), v(x_i))
+\end{equation*}$$ where $\mu(\cdot)$ and $v(\cdot)$ are the mean and
+variance function, respectively. Up to constants, the negative
+log-likelihood writes: $$\begin{equation*}
+L(\mu,v) = \sum_{i=1}^n \frac{(y_i-\mu(x_i))^2}{v(x_i)} + \sum_{i=1}^n \log(v(x_i)).
+\end{equation*}$$ We place ourselves in the following setting: $\mu$ is
+considered to be a known function, potentially learned separately, and
+we model the variance function $v=1/f_{\mathcal{A}}$ as the inverse of a
+kernel SoS function defined by a PSD operator
+$\mathcal{A}\in\mathcal{S}_{+}\left(\mathcal{H}^{f}\right)$ with kernel
+$k^{f}$ and lengthscale $\theta^{f}$. With this parameterization, the
+negative log-likelihood becomes convex in $\mathcal{A}$.
+@prp-het-regr-known-mean below gives the primal and dual formuations
+associated to learning the function $f_{\mathcal{A}} = 1/v$.
+
+::: {#prp-het-regr-known-mean .proposition}
+Assume that $\Omega$ is as in @eq-elastic-net-regularization with
+$\lambda^{f}_{2}>0$. For some known mean function $\mu(\cdot)$, unknown
+variance function $v(\cdot)>0$ and denoting
+$\boldsymbol{t}=(t_1,\ldots,t_n)$ with $t_i=(y_i-\mu(x_i))^2$ the vector
+of squared residuals, the maximum likelihood estimator for
+heteroscedastic regression writes $$\begin{equation*}
+\underset{ \mathcal{A}\in \mathcal{S}_{+}\left(\mathcal{H}^{f}\right)
+}{\inf} \sum_{i=1}^n t_if_{\mathcal{A}}(x_i) - \sum_{i=1}^n \log(f_{\mathcal{A}}(x_i)) + \Omega(\mathcal{A})
+\end{equation*}$$ with finite-dimensional equivalent:
+$$\begin{equation*}
+\underset{ \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \sum_{i=1}^n t_i\tilde{f}_{\mathbf{A}}(x_i) - \sum_{i=1}^n \log(\tilde{f}_{\mathbf{A}}(x_i)) + \Omega(\mathbf{A}).
+\end{equation*}$$ The associated dual formulation is $$\begin{aligned}
+\underset{
+\substack{\boldsymbol{\alpha} \in \mathbb{R}^{n}\\
+\boldsymbol{\alpha} + \boldsymbol{t} > 0
+}
+}
+{\sup} \quad & n + \sum_{i=1}^n  \log\left(\alpha_i + t_i\right) - \frac{1}{4\lambda^{f}_{2}} \lVert [\mathbf{V}\mathrm{Diag}(\boldsymbol{\alpha})\mathbf{V}^{\top} - \lambda^{f}_{1} \mathbf{I}_{r}]_+\rVert_F^2.
+\end{aligned}$$ {#eq-het-regr-known-mean-dual}
+:::
+
+The proof can be found in @sec-apx-learning-problems. The primal
+formulation is derived directly from @thm-representant-marteauferey, or
+from @thm-general-representer-theorem with $p=0$ and $q=1$. On the other
+hand, the dual formulation is obtained by computing the Fenchel
+conjugate of the convex and bounded below loss function
+$L(u_1,\ldots,u_n)=\sum_{i=1}^n t_i u_i - \sum_{i=1}^n \log(u_i)$.\
+
+```{python}
+#| label: fig-het-regr-seq
+#| fig-cap: "Heteroscedastic regression with known mean, trained with cross-validation on $n=1000$ training samples (grey). Mean (red) and $95\\%$ confidence intervals (orange), true (dashed line) versus estimation (full line)."
+#| out-width: 65%
+import io
+import contextlib
 import numpy as np
-x = np.random.normal(0, 1, 10)
-x
-```
-
-## Figures
-
-Plots can be generated as follows:
-
-```{python stem-plot}
-#| label: fig-stem-plot
-#| fig-cap: "A basic Stem plot"
-
 import matplotlib.pyplot as plt
-import numpy as np
 
-x = np.linspace(0.1, 2 * np.pi, 41)
-y = np.exp(np.sin(x))
+from dualforms.data_generation.supervised import Supervised
+from dualforms.problems.heteroscedastic_regression.base import HeteroscedasticRegression
+from dualforms.kernels.matern import Matern
+from dualforms.plots.heteroscedastic import plot_heteroscedastic
 
-plt.stem(x, y)
+# ── kSoS problem settings ───────────────────────────────────────────────────────────────────
+ALPHA = 0.05
+CASE = "case_1"
+N = 1000
+SEED = 1
+
+MAX_ITERS = 100_000
+GAP_TOL = 1e-2
+USE_LOW_RANK = True
+TARGET_VARIANCE = 0.995
+METHOD_LOW_RANK = "svd"
+SOLVER = "AGD"
+
+# ── Best hyperparameter combination identified by cross-validation ───
+PARAMS_SEQUENTIAL = {
+    "mean_theta": 0.5, "variance_theta": 0.6,
+    "lambda_m": 1e-1, "lambda1": 1e-2, "lambda2": 1e-2,
+}
+
+def build_model(mode, mean_theta, variance_theta, lambda_m, lambda1, lambda2):
+    return HeteroscedasticRegression(
+        mode=mode,
+        mean_kernel=Matern(),
+        variance_kernel=Matern(),
+        mean_theta=mean_theta,
+        variance_theta=variance_theta,
+        lambda_m=lambda_m,
+        lambda1=lambda1,
+        lambda2=lambda2,
+    )
+
+def run(mode, X, y, X_test, params):
+    """
+    For a fixed training data and feature vectors in test data,
+    run a single optimization of the heteroscedastic regression problem at fixed hyperparameters for a given mode,
+    and return the mean and variance predictions at each test sample.
+    """
+    model = build_model(mode, **params)
+    model.train(
+        X, y,
+        solver=SOLVER,
+        max_iters=MAX_ITERS,
+        gap_tol=GAP_TOL,
+        use_low_rank=USE_LOW_RANK,
+        target_variance=TARGET_VARIANCE,
+        method_low_rank=METHOD_LOW_RANK,
+    )
+    return model.predict(X_test)
+
+# Sample data
+dataset = Supervised(name=CASE, input_dim=1, output_dim=1)
+X, y = dataset.sample(n=N, seed=SEED)
+X_test, y_test = dataset.sample_grid(n=300, seed=0)
+true_mean, true_var, true_lo, true_hi = dataset.oracle(X_test, alpha=ALPHA)
+
+with contextlib.redirect_stdout(io.StringIO()):
+    mean_pred, var_pred = run("sequential", X, y, X_test, PARAMS_SEQUENTIAL)
+
+RMSE_mean = np.sqrt(np.mean((mean_pred - true_mean) ** 2))
+RMSE_var = np.sqrt(np.mean((var_pred - true_var) ** 2))
+
+fig = plot_heteroscedastic(
+    X, y, X_test, None,
+    mean_pred, var_pred,
+    true_mean=true_mean, true_lo=true_lo, true_hi=true_hi,
+    alpha=ALPHA, rmse_mean=RMSE_mean, rmse_var=RMSE_var,
+)
 plt.show()
+plt.close(fig)
 ```
 
-It is also possible to create figures from static images:
+Let us then investigate this learning problem on the following synthetic
+dataset inspired by @gramacy2009: $$\begin{equation*}
+x_i \sim \mathcal{U}(-1,1), \quad
+y_i = \mu(x_i) + \sigma(x_i)\epsilon_i,
+\end{equation*}$$ where
+$\mu(x)=\omega(x)\mathbb{I}_{x \leq c} + (x-9/10)\mathbb{I}_{x > c}$,
+$\omega(x) = \sin(\pi(2x+1/5)) + 0.2\cos(4\pi(2x+1/5))$, $c = 0.86$,
+$\sigma(x) = \sqrt{0.1+2x^2}$ and $\epsilon_i \sim \mathcal{N}(0,1)$.
+@fig-het-regr-seq shows the best model selected by cross-validation on a
+training sample of size $n=1000$ (full lines) versus the true mean
+(dashed red line) and the true confidence bands at level $95\%$ (dashed
+orange line). More precisely, we first solve a kernel ridge regression
+problem for the mean function (full red line), and then solve
+@eq-het-regr-known-mean-dual to estimate the variance function, from
+which we construct the estimated $95\%$ confidence bands (full orange
+lines). We observe that the predicted intervals are able to recover the
+shape of the true heteroscedastic noise: narrow where the variance is
+small, in the center, and wide near the boundaries of the input domain,
+where the true variance is larger. For future reference, we also display
+the root mean squared error (RMSE) for both mean and variance functions
+computed on a test set of size $300$.
 
-:::{#fig-logo}
+### Non-crossing multi-quantile regression with known median {#sec-subsec-kSoS-only-multiquantile}
 
-![](https://raw.githubusercontent.com/computorg/comm/main/design/logo_text_vertical.png){height=200}
+Given an i.i.d. sample $(x_i,y_i)_{i=1,\ldots,n}$ from a joint
+distribution $P_{XY}$, our objective is to estimate multiple quantiles
+of the conditional distribution $P(Y\vert X=x)$, i.e. estimate functions
+$q_{\tau}(x)$ where $P(Y > q_{\tau}(X) \vert X=x)=\tau$ for several
+$\tau\in(0,1)$. For notational convenience, let us denote
+$\tau_{-1},\ldots,\tau_{-q_{-}}\in(0,0.5)$ the quantile levels to be
+estimated that are less than $0.5$ in decreasing order,
+$\tau_{1},\ldots,\tau_{q_{+}}\in(0.5,1)$ those which are greater than
+$0.5$ in increasing order, and $q_{0.5}$ the conditional median which is
+assumed to be known, once again possibly learned beforehand.\
+We focus here on the pinball loss
+$\rho_{\tau}(u) = \max (\tau u, (\tau-1) u)$: the statistical learning
+problem associated to multi-quantile regression thus writes
+$$\begin{equation*}
+\underset{ \{q_{\tau_{-j}}\}_{j=1}^{q_{-}},\, \{q_{\tau_{k}}\}_{k=1}^{q_{+}}
+}{\inf} \;  \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}(y_i -  q_{\tau_{-j}}(x_i)) + \sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}(y_i -  q_{\tau_{k}}(x_i)).
+\end{equation*}$$ In order to enforce non-crossing among quantiles, i.e.
+to guarantee that $\forall x,\, q_{\tau}(x) \leq q_{\tau'}(x)$ if
+$\tau \leq \tau'$, we follow here the proposal of @marteauferey2020 and
+model the quantiles as $$\begin{align*}
+q_{\tau_{-j}}(x) & = q_{0.5}(x) - \sum_{j'=1}^j f_{\mathcal{A}_{-j'}}(x)\\
+q_{\tau_{k}}(x) & = q_{0.5}(x) + \sum_{k'=1}^k f_{\mathcal{A}_{k'}}(x)
+\end{align*}$$ for kSoS functions $f_{\mathcal{A}_{-j}}$ for
+$j=1,\ldots,q_{-}$ and $f_{\mathcal{A}_{k}}$ for $k=1,\ldots,q_{+}$.
+Thanks to these expressions writing as cumulative sums of non-negative
+functions, non-crossing is guaranteed everywhere by design. The
+following proposition gives the primal and dual formulations associated
+to this learning problem, with a known conditional median function.
 
-Computo logo (label)
+::: {#prp-multi-quantile-known-median .proposition}
+Assume that $\Omega_{-j}$ and $\Omega_{k}$ are elastic-net
+regularizations as in @eq-elastic-net-regularization with
+$\lambda^{f}_{-j2},\lambda^{f}_{k2}>0$. Denoting
+$\boldsymbol{t}=(t_1,\ldots,t_n)$ with $t_i=y_i-q_{0.5}(x_i)$ the vector
+of residuals around the median, the non-crossing multi-quantile
+regression problem with known median writes $$\begin{align*}
+\underset{
+\substack{ 
+\{\mathcal{A}_{-j}\}_{j=1}^{q_{-}} \in \prod_{j=1}^{q_{-}} \mathcal{S}_{+}\left(\mathcal{H}^{f}_{-j}\right)  \\
+\{\mathcal{A}_{k}\}_{k=1}^{q_{+}} \in \prod_{k=1}^{q_{+}} \mathcal{S}_{+}\left(\mathcal{H}^{f}_{k}\right) 
+}
+}{\inf}
+\quad& \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(t_i+ \sum_{j'=1}^j f_{\mathcal{A}_{-j'}}(x_i)\right) + \sum_{j=1}^{q_{-}} \Omega_{-j}(\mathcal{A}_{-j})\\
+\quad& + \sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(t_i - \sum_{k'=1}^k f_{\mathcal{A}_{k'}}(x_i)\right) + \sum_{k=1}^{q_{+}} \Omega_{k}(\mathcal{A}_{k}),
+\end{align*}$$ with finite-dimensional equivalent: $$\begin{align*}
+\underset{
+\substack{ 
+\{\mathbf{A}_{-j}\}_{j=1}^{q_{-}} \in \prod_{j=1}^{q_{-}} \mathbb{S}_{+}^{r_{-j}}   \\
+\{\mathbf{A}_{k}\}_{k=1}^{q_{+}} \in \prod_{k=1}^{q_{+}}\mathbb{S}_{+}^{r_{k}}
+}
+}{\inf}
+\quad& \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(t_i + \sum_{j'=1}^j \tilde{f}_{\mathbf{A}_{-j'}}(x_i)\right) + \sum_{j=1}^{q_{-}} \Omega_{-j}(\mathbf{A}_{-j})\\
+\quad& + \sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(t_i - \sum_{k'=1}^k \tilde{f}_{\mathbf{A}_{k'}}(x_i)\right) + \sum_{k=1}^{q_{+}} \Omega_{k}(\mathbf{A}_{k}).
+\end{align*}$$
+
+The associated dual formulation is $$\begin{aligned}
+\underset{ \substack{
+\boldsymbol{\alpha}_{-j} \in [\tau_{-j}-1,\tau_{-j}],\; j=1,\ldots,q_{-}\\
+\boldsymbol{\alpha}_{k} \in [\tau_{k}-1,\tau_{k}],\; k=1,\ldots,q_{+}}
+}{\sup}  \quad &  \boldsymbol{t}^{\top}\left(\sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right) \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(-\sum_{l=j}^{q_{-}}\boldsymbol{\alpha}_{-l}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2  \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\sum_{l=k}^{q_{+}}\boldsymbol{\alpha}_{l}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2.
+\end{aligned}$$ {#eq-multi-quantile-known-median-dual}
 :::
 
+The proof can be found in @sec-apx-learning-problems and makes use of
+our generalized @thm-general-representer-theorem with $p=0$ and
+$q=q_{-}+q_{+}$ to derive the primal formulation. Remark that since we
+consider different RKHS for each kSoS function, we apply
+@thm-general-representer-theorem, even though the less general version
+of @allain2026 [Theorem A.2] would have sufficed here. The dual
+formulation is obtained by deriving the Fenchel conjugate of the loss
+function, which writes as the composition of the pinball loss with a
+linear map.\
+Consider now the following data-generating process inspired by
+@allain2026: $$\begin{align*}
+x_{i}\sim \mathcal{U}[0,4\pi],\quad y_{i}=\sin(x_{i})+\epsilon_{i}\Bigl[\sigma_{-}(x_{i})\,\mathbf{1}_{\{\epsilon_{i}<0\}} + \sigma_{+}(x_{i})\,\mathbf{1}_{\{\epsilon_{i}\ge 0\}}\Bigr],
+\end{align*}$$ where $\sigma_{-}(x) = 0.5$,
+$\sigma_{+}(x) = 0.4(\sin(x) + 1) + 0.1$ and
+$\epsilon_i{}\sim\mathcal{N}(0,1)$.
 
-## Tables
+```{python}
+#| label: fig-multi-quantiles-seq
+#| fig-cap: "Non-crossing multi-quantiles regression with known median, trained with cross-validation on $n=1000$ training samples (grey). True quantiles (dashed lines) versus estimation (full lines) with same lengthscales (top row) and free ones (bottom row). Left and right panels are zoomed-in views for the boxed areas in the center."
+#| out-width: 65%
+import io
+import contextlib
+import numpy as np
+import matplotlib.pyplot as plt
 
-Tables (with label: `@tbl-mylabel` renders @tbl-mylabel) can be generated with markdown as follows
+from dualforms.data_generation.supervised import Supervised
+from dualforms.problems.multiquantile_regression.base import MultiQuantileRegression
+from dualforms.kernels.matern import Matern
+from dualforms.plots.multiquantile import compute_true_quantiles, plot_multiquantile_comparison
 
-| Tables   |      Are      |  Cool |
-|----------|:-------------:|------:|
-| col 1 is |  left-aligned | $1600 |
-| col 2 is |    centered   |   $12 |
-| col 3 is | right-aligned |    $1 |
-: my table caption {#tbl-mylabel}
+ZOOM_LEFT = (0.5, 2.5, 0.2, 1.25)
+ZOOM_RIGHT = (3.75, 5.75, -1.75, -0.75)
 
-## Handling references {#sec-references}
+# ── kSoS problem settings ───────────────────────────────────────────────────────────────────
+CASE = "case_2"
+N = 1000
+SEED = 5
 
-### Bibliographic references
+QUANTILE_LEVELS = [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]
 
-References are displayed as footnotes using
-[BibTeX](http://www.bibtex.org/), e.g. `[@computo]` will be displayed
-as [@computo], where `computo` is the bibtex key for this specific
-entry. The bibliographic information is automatically retrieved from
-the `.bib` file specified in the header of this document (here:
-`references.bib`).
+MAX_ITERS = 100_000
+GAP_TOL = 1e-2
+USE_LOW_RANK = True
+TARGET_VARIANCE = 0.995
+METHOD_LOW_RANK = "svd"
+SOLVER = "AGD"
 
-### Other cross-references
+# ── Best hyperparameter combination identified by cross-validation ───
+PARAMS_FREE = {
+    "theta_m": 0.7,
+    "theta_qlow": 1.3,
+    "theta_qupp": 0.7,
+    "lambda_m": 1,
+    "lambda1": 1,
+    "lambda2": 1,
+}
+PARAMS_SAME = {
+    "theta_m": 0.7,
+    "theta_qlow": 0.7,
+    "theta_qupp": 0.7,
+    "lambda_m": 1,
+    "lambda1": 1,
+    "lambda2": 1,
+}
 
-As already (partially) seen, Quarto includes a mechanism similar to the
-bibliographic references for sections, equations, theorems, figures,
-lists, etc. Have a look at [this
-page](https://quarto.org/docs/authoring/cross-references.html).
+def build_model(theta_m, theta_qlow, theta_qupp, lambda_m, lambda1, lambda2):
+    n_q = len(QUANTILE_LEVELS)
+    return MultiQuantileRegression(
+        mode="sequential",
+        quantile_levels=QUANTILE_LEVELS,
+        median_kernel=Matern(),
+        quantile_kernels=[Matern() for _ in range(n_q)],
+        median_theta=theta_m,
+        quantile_thetas=[theta_qlow] * (n_q // 2) + [theta_qupp] * (n_q // 2),
+        lambda_m=lambda_m,
+        lambda1s=[lambda1] * n_q,
+        lambda2s=[lambda2] * n_q,
+    )
 
-## Advanced formatting
+def aggregate_rmse(predictions, true_quantiles):
+    return np.mean([
+        np.sqrt(np.mean((predictions[tau] - true_quantiles[tau]) ** 2))
+        for tau in predictions.keys()
+    ])
 
-Advanced formatting features are possible and documented (including interactive plots, pseudo-code, (Tikz) diagrams, Lua filters, mixing R + Python in the same document), but are beyond the scope of this simple introduction. We point to several entries in this direction.
+def run_sequential(X, y, X_test, params):
+    """
+    For a fixed training data (X,y) and feature vectors in test data X_test,
+    run a single optimization for the kernel quantile regression problem for a fixed set of hyperparameters, then,
+    run a single optimization for the multi-quantile regression with known median problem for a fixed set of hyperparameters,
+    and return the quantile predictions at each test samples.
+    """
+    model = build_model(**params)
+    model.train(
+        X, y,
+        solver=SOLVER,
+        max_iters=MAX_ITERS,
+        gap_tol=GAP_TOL,
+        use_low_rank=USE_LOW_RANK,
+        target_variance=TARGET_VARIANCE,
+        method_low_rank=METHOD_LOW_RANK,
+    )
+    return model.predict(X_test)
 
-::: {.callout-warning}
-## More information
+# Sample data
+dataset = Supervised(name=CASE, input_dim=1, output_dim=1)
+X, y = dataset.sample(n=N, seed=SEED)
+X_test, y_test = dataset.sample_grid(n=300, seed=0)
+true_quantiles = compute_true_quantiles(dataset, X_test, QUANTILE_LEVELS)
 
-- [The Quarto web site](https://quarto.org) for comprehensive documentation, including:
-  + [Tutorial](https://quarto.org/docs/get-started/)
-  + [User guide](https://quarto.org/docs/guide/)
-  + [Options reference](https://quarto.org/docs/reference/)
+# Run both quantile regression variants
+with contextlib.redirect_stdout(io.StringIO()):
+    predictions = {}
+    for label, params in [("same", PARAMS_SAME), ("free", PARAMS_FREE)]:
+        predictions[label] = run_sequential(X, y, X_test, params)
 
-- [The template distributed with the Computo Quarto extension](https://computo.sfds.asso.fr/computo-quarto-extension/), which uses such advanced features.
+fig = plot_multiquantile_comparison(
+    X, y, X_test, y_test,
+    predictions_by_row=[predictions["same"], predictions["free"]],
+    true_quantiles=true_quantiles,
+    quantile_levels=QUANTILE_LEVELS,
+    row_labels=[r"Same $\theta^f$", r"Free $\theta^f$"],
+    rmse_by_row=[
+        aggregate_rmse(predictions["same"], true_quantiles),
+        aggregate_rmse(predictions["free"], true_quantiles),
+    ],
+    zoom_left=ZOOM_LEFT, zoom_right=ZOOM_RIGHT,
+)
+plt.show()
+plt.close(fig)
+```
 
-- [Our mock version of the t-SNE paper](https://computo.sfds.asso.fr/published-paper-tsne/), a full and advanced example using Python and the Jupyter kernel.
+@fig-multi-quantiles-seq displays the best model selected by
+cross-validation when the training is performed sequentially, on the
+same $n=1000$ training samples. First, we train a kernel quantile
+regression problem to target the true conditional median (dashed teal).
+Then, we solve @eq-multi-quantile-known-median-dual for all other
+quantiles (dashed purple to yellow). In addition to the predictions on
+the entire feature space in the center, we also provide two zoomed-in
+views on the left and right to better investigate the estimated quantile
+functions. In the top row, we show the resulting estimations when we use
+operators defined on the same RKHS (thus with same lengthscales
+$\theta^{f}$) for all quantiles. For comparison, in the bottom row, we
+allow different spaces for the quantiles below the median and those
+above, which we refer to as the \"free\" setting. First, observe that
+for both configurations, we have non-crossing quantiles, as expected.
+However, some quantiles are poorly estimated in the same lengthscale
+setting, such as the $0.4$ level: on the left zoomed-in view it is clear
+that it collapses on the median. This in turn highly degrades the
+quality of the lower level quantiles $0.3$ and $0.2$. In the bottom row,
+where we allow different lengthscales for lower and upper quantiles,
+this gives them more freedom to adapt to the data: this time we see that
+the $0.4$ level quantile does not collide with the median anymore, and
+that the $0.3$ and $0.2$ level quantiles are in turn much better
+estimated. In the right zoomed-in view, we can also note that this
+correction, allowed by selecting different lengthscales across quantile
+levels, makes it possible to better reproduce the waves of the true
+signal. Indeed, all the quantiles below the median are better estimated
+than with the same lengthscale at the top. In conclusion, this
+illustration shows the benefits of allowing different spaces for kSoS
+functions: in the small data regime we can expect a more accurate
+estimation of the targets, which is also supported by the smaller RMSE
+displayed in the figure (aggregated across all quantiles and computed on
+a test set of size $300$).
 
-- [The previously published papers in Computo](https://computo.sfds.asso.fr/publications/) can be used as references.
+### Density estimation {#sec-subsec-kSoS-only-density}
 
+Finally, our goal in density estimation is to recover the unknown
+probability density function $p(x)$ from an i.i.d. sample
+$(x_i)_{i=1,\ldots,n}$ drawn from $p(x)$. To achieve this, the model is
+trained by minimizing the empirical negative log-likelihood loss, which
+is written as: $$\begin{equation*}
+L(p) = - \frac{1}{n} \sum_{i=1}^n \log(p(x_i)).
+\end{equation*}$$ @marteauferey2020 proposed to parameterize
+$p(x)=f_{\mathcal{A}}(x)\nu(x)$ as the product of a kSoS function
+defined by a PSD operator
+$\mathcal{A}\in \mathcal{S}_{+}\left(\mathcal{H}^{f}\right)$ with kernel
+$k^{f}$ and lengthscale $\theta^{f}$, and where $\nu$ is a reference
+probability density function. They also impose the additional constraint
+$\int_{\mathcal{X}} f_{\mathcal{A}}(x)\nu(x)dx=1$. Unfortunately, the
+corresponding infinite-dimensional penalized kSoS problem does not fall
+in the setting of their representer theorem or ours. Indeed, their proof
+relies on the fact that, after projection on the data span, the
+regularizers must not increase and the evaluations at the data points
+$x_i$ are invariant. But if the learning problem is constrained, the
+projection must be feasible for the proof to still be valid: this is not
+the case for the integral constraint above. Therefore, following
+@marteauferey2020 we do not apply the representer theorem and simply
+consider the sub-optimal finite-dimensional approximation. While being
+sub-optimal, it allows to strictly enforce an integral equal to $1$.
+@prp-dens-est gives the finite-dimensional approximation and its
+associated dual formulation. Note that since $\nu(x_i)$ is a constant in
+the optimization problem, we drop $\nu$ from the objective function.
+
+::: {#prp-dens-est .proposition}
+For some reference measure $\nu$, the finite-dimensional maximum
+likelihood estimator for density estimation writes: $$\begin{align*}
+\underset{  \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \quad& - \sum_{i=1}^n \log(\tilde{f}_{\mathbf{A}}(x_i)) + \Omega(\mathbf{A})\\
+\mathrm{s.t.} \quad& \int_{\mathcal{X}} \tilde{f}_{\mathbf{A}}(x)\nu(x)dx=1.
+\end{align*}$$ The associated dual formulation with $\Omega$ from
+@eq-elastic-net-regularization is
+$$\underset{\substack{\theta\in\mathbb{R},\, \boldsymbol{\alpha}\in\mathbb{R}^n\\ \boldsymbol{\alpha} \geq 0}
+}{\sup} \quad - \theta + n + \sum_{i=1}^n  \log(\alpha_{i}) - \frac{1}{4\lambda^{f}_{2}} \lVert [\mathbf{V}\mathrm{Diag}(\boldsymbol{\alpha})\mathbf{V}^{\top} - \lambda^{f}_{1} \mathbf{I}_{r}-\theta \mathbf{W}_{\nu}]_+\rVert_F^2$$ {#eq-dens-est-dual}
+where
+$\mathbf{W}_{\nu}=(\mathbf{V}\mathbf{V}^{\top})^{-1}\mathbf{V}\mathbf{M}_{\nu}\mathbf{V}^{\top} (\mathbf{V}\mathbf{V}^{\top})^{-1}$
+with
+$$[\mathbf{M}_{\nu}]_{i,j} = \int_{\mathcal{X}} k^{f}(x,x_i)k^{f}(x,x_j)\nu(x)dx.$$ {#eq-matrix_MC}
 :::
+
+The proof for the dual formulation is given in
+@sec-apx-learning-problems, where it is obtained by considering the
+Lagrangian formulation with Lagrange multiplier $\theta$ to include the
+integral constraint into the dual.\
+
+For illustration purposes, we generate data following a mixture of two
+banana-shaped distributions: $$\begin{equation*}
+p(x_1,x_2) = \frac{1}{2}\,\mathrm{Banana}(x_1,x_2;-0.1, -0.4, 0.5) 
++ \frac{1}{2}\,\mathrm{Banana}(x_1,x_2;0.3, 0.3, -0.5)
+\end{equation*}$$ where $\mathrm{Banana}(x_1,x_2;\mu, o, d)$ denotes the
+distribution with density proportional to $$\begin{equation*}
+\exp\left(-\frac{(x_1-\mu)^2}{2\sigma_1^2}\right)
+\exp\left(-\frac{\big(x_2 - o - d\,(x_1-\mu)^2\big)^2}{2\sigma_2^2}\right)
+\end{equation*}$$ with $\sigma_1=0.5$ and $\sigma_2=0.2$, which is
+inspired by the banana-shape distribution introduced in @haario1999.
+
+```{python}
+#| label: fig-dens-est
+#| fig-cap: "Density estimation, trained with cross-validation on $n=2000$ training samples (grey). Isoquantile contour levels for true density (dashed lines) versus estimation (full lines)."
+#| out-width: 65%
+import io
+import contextlib
+import numpy as np
+import matplotlib.pyplot as plt
+
+from dualforms.problems.density_estimation.dual import Dual_Density
+from dualforms.kernels.matern import Matern
+from dualforms.plots.density2D import plot_density_2D
+from dualforms.data_generation.unsupervised import Unsupervised
+
+# ── kSoS problem settings ──────────────────────────────────────────────────────────────
+N = 2000
+SEED = 7
+SOLVER = "BFGS"
+
+MAX_ITERS = 100_000
+COV_TOL = 1e-2
+GAP_TOL = 1e-2
+REF_DENSITY = "gaussian"
+N_MC_DENSITY = 10_000
+USE_LOW_RANK = True
+TARGET_VARIANCE = 0.995
+METHOD_LOW_RANK = "svd"
+
+N_INTEGRAL = 10_000
+SEED_INTEGRAL = 1
+
+# ── Best hyperparameter combination identified by cross-validation ───
+PARAMS = {
+    "theta_x1": 0.7,
+    "theta_x2": 0.8,
+    "lambda1": 1.0,
+    "lambda2": 1.0,
+}
+
+def build_model(theta_x1, theta_x2, lambda1, lambda2):
+    return Dual_Density(kernel=Matern(), theta=[theta_x1, theta_x2], lambda1=lambda1, lambda2=lambda2)
+
+dataset = Unsupervised(name="banana")
+X_train = dataset.sample(N, SEED)
+
+with contextlib.redirect_stdout(io.StringIO()):
+    """
+    Run a single optimization of the density estimation at fixed hyperparameters.
+    """
+    model = build_model(**PARAMS)
+    model.train(
+        X_train,
+        ref_density=REF_DENSITY,
+        n_mc_density=N_MC_DENSITY,
+        solver=SOLVER,
+        max_iters=MAX_ITERS,
+        cov_tol=COV_TOL,
+        gap_tol=GAP_TOL,
+        use_low_rank=USE_LOW_RANK,
+        target_variance=TARGET_VARIANCE,
+        method_low_rank=METHOD_LOW_RANK,
+    )
+
+sample_min = X_train.min(axis=0)
+sample_max = X_train.max(axis=0)
+x_grid, y_grid, dx, dy = dataset.sample_grid(n=200, sample_min=sample_min, sample_max=sample_max)
+
+density_pred = model.predict(np.vstack([x_grid.ravel(), y_grid.ravel()]).T).reshape(x_grid.shape)
+density_pred = density_pred / (np.sum(density_pred) * dx * dy)
+
+density_true = dataset.oracle(x_grid, y_grid, dx, dy)
+
+integral = model.estimate_integral(N_INTEGRAL, SEED_INTEGRAL)
+
+fig = plot_density_2D(X_train, x_grid, y_grid, dx, dy, density_pred, density_true,
+                    title="", integral=integral)
+plt.show()
+plt.close(fig)
+```
+
+@fig-dens-est shows the best model selected by cross-validation, where
+we specifically use an anisotropic kernel and take the reference density
+$\nu(x)$ equal to a standard Gaussian with $\mathbf{M}_{\nu}$ estimated
+by Monte-Carlo. The isoquantile contour levels of the true density are
+displayed in dashed lines, while the estimated ones (full lines) are
+obtained by solving @eq-dens-est-dual on a dataset of size $n=2000$. We
+can observe that they are remarkably well estimated: not only the small
+ones, from levels $0.1$ in yellow to $0.5$ in green, that constitute the
+two islands in the center, but also the high levels such as $0.8$ in
+seal and $0.9$ in blue. Only the right and left $0.95$ contour lines of
+the distribution are harder to learn. Overall, we see that the true
+density is accurately reconstructed and we can check numerically that
+the integral is indeed very close to $1$ as displayed in the figure, up
+to numerical approximations. These approximations come from two sources:
+first, we estimate the displayed integral with Monte-Carlo on the
+density obtained after solving the problem and second, inside the
+optimization algorithm we estimate the matrix $\mathbf{M}_{\nu}$ in
+@eq-matrix_MC with another Monte-Carlo sample (although this
+approximation error may be removed since it can be computed in
+closed-form for specific choices of kernels and reference density). To
+summarize, these results show that, while being sub-optimal in theory,
+the finite-dimensional approximation works very well in practice.
+
+## Joint learning problems {#sec-subsec-joint-learning-problems}
+
+Now, we introduce two new regression problems which leverage our
+generalized representer theorem for learning jointly RKHS and kSoS
+functions. These are natural generalizations of the regression problems
+considered in @sec-subsec-kSoS-only-problems.
+
+### Heteroscedastic regression
+
+We place ourselves in the same learning setting as in
+@sec-subsec-kSoS-only-hetregr. However, this time the mean function
+$\mu$ is supposed to be unknown and must be estimated jointly with the
+kSoS function $f_{\mathcal{A}} = 1/v$. Since the loss function is not
+convex in $(\mu, \mathcal{A})$, we use the parameterization
+$g(x)=\mu(x)/v(x)=\mu(x)f_{\mathcal{A}}(x)$ for a function $g$ in a RKHS
+$\mathcal{H}^{g}$ with kernel $k^{g}$ and lengthscale $\theta^{g}$, such
+that the loss function is now jointly convex in $(g,\mathcal{A})$. The
+primal and dual formulations for this joint learning problem are given
+in the following proposition.
+
+::: {#prp-het-regr .proposition}
+Assume that $R$ is as in @eq-ridge-regularization and $\Omega$ is as in
+@eq-elastic-net-regularization with
+$\lambda^{g},\lambda^{f}_{1},\lambda^{f}_{2}>0$. The maximum likelihood
+estimator for heteroscedastic regression writes $$\begin{align*}
+\underset{ g\in \mathcal{H}^{g},\; \mathcal{A}\in \mathcal{S}_{+}\left(\mathcal{H}^{f}\right)
+}{\inf} \quad& \sum_{i=1}^n y_i^2 f_{\mathcal{A}}(x_i) + \sum_{i=1}^n \frac{g(x_i)^2}{f_{\mathcal{A}}(x_i)} - 2 \sum_{i=1}^n y_i g(x_i) - \sum_{i=1}^n \log(f_{\mathcal{A}}(x_i)) \\
+\quad& + R(\lVert g\rVert_{\mathcal{H}^{g}}) + \Omega(\mathcal{A}),
+\end{align*}$$ with finite-dimensional equivalent: $$\begin{align*}
+\underset{ \boldsymbol{\gamma}\in\mathbb{R}^n,\; \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \quad& \sum_{i=1}^n y_i^2 \tilde{f}_{\mathbf{A}}(x_i) + \sum_{i=1}^n \frac{(\boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma})^2}{\tilde{f}_{\mathbf{A}}(x_i)} - 2 \sum_{i=1}^n y_i \boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma} - \sum_{i=1}^n \log(\tilde{f}_{\mathbf{A}}(x_i)) \\
+\quad& + R(\sqrt{\boldsymbol{\gamma}^{\top}\mathbf{K}^{g}\boldsymbol{\gamma}}) + \Omega(\mathbf{A}).
+\end{align*}$$ The associated dual formulation is: $$\begin{aligned}
+\underset{
+\substack{\boldsymbol{\alpha},\; \boldsymbol{\beta} \in \mathbb{R}^{n}\\
+\boldsymbol{\beta}\odot \boldsymbol{y}+\boldsymbol{\alpha} - \boldsymbol{\beta}^{\odot 2}/4 > 0
+}
+}{\sup} \quad & n + \sum_{i=1}^n  \log\left(\beta_i y_i+\alpha_i - \beta_i^2/4\right) - \frac{1}{4\lambda^{g}} \boldsymbol{\beta}{}^{\top} \boldsymbol{K}^{g} \boldsymbol{\beta}\\
+\quad & - \frac{1}{4\lambda^{f}_{2}} \lVert [\mathbf{V}\mathrm{Diag}(\boldsymbol{\alpha})\mathbf{V}^{\top} - \lambda^{f}_{1} \mathbf{I}_{r}]_+\rVert_F^2.
+\end{aligned}$$ {#eq-het-regr-joint-dual}
+:::
+
+The proof is given in @sec-apx-learning-problems.
+@thm-general-representer-theorem directly applies with $p=1$ and $q=1$
+to obtain the primal formulation, and the dual formulation is once again
+obtained by computing the Fenchel conjugate of the loss function.\
+
+```{python}
+#| label: fig-het-regr-joint
+#| fig-cap: "Heteroscedastic regression trained with cross-validation on $n=1000$ training samples (grey). Mean (red) and $95\\%$ confidence intervals (orange), true (dashed line) versus estimation (full line)."
+#| out-width: 65%
+import io
+import contextlib
+import numpy as np
+import matplotlib.pyplot as plt
+
+from dualforms.data_generation.supervised import Supervised
+from dualforms.problems.heteroscedastic_regression.base import HeteroscedasticRegression
+from dualforms.kernels.matern import Matern
+from dualforms.plots.heteroscedastic import plot_heteroscedastic
+
+# ── kSoS problem settings ───────────────────────────────────────────────────────────────────
+ALPHA = 0.05
+CASE = "case_1"
+N = 1000
+SEED = 1
+
+MAX_ITERS = 100_000
+GAP_TOL = 1e-2
+USE_LOW_RANK = True
+TARGET_VARIANCE = 0.995
+METHOD_LOW_RANK = "svd"
+SOLVER = "AGD"
+
+# ── Best hyperparameter combination identified by cross-validation ───
+PARAMS_JOINT = {
+    "mean_theta": 0.4,
+    "variance_theta": 0.6,
+    "lambda_m": 1e-2,
+    "lambda1": 1e-2,
+    "lambda2": 1e-2,
+}
+
+def build_model(mode, mean_theta, variance_theta, lambda_m, lambda1, lambda2):
+    return HeteroscedasticRegression(
+        mode=mode,
+        mean_kernel=Matern(),
+        variance_kernel=Matern(),
+        mean_theta=mean_theta,
+        variance_theta=variance_theta,
+        lambda_m=lambda_m,
+        lambda1=lambda1,
+        lambda2=lambda2,
+    )
+
+def run(mode, X, y, X_test, params):
+    """
+    For a fixed training data and feature vectors in test data,
+    run a single optimization of the heteroscedastic regression problem at fixed hyperparameters for a given mode,
+    and return the mean and variance predictions at each test sample.
+    """
+    model = build_model(mode, **params)
+    model.train(
+        X, y,
+        solver=SOLVER,
+        max_iters=MAX_ITERS,
+        gap_tol=GAP_TOL,
+        use_low_rank=USE_LOW_RANK,
+        target_variance=TARGET_VARIANCE,
+        method_low_rank=METHOD_LOW_RANK,
+    )
+    return model.predict(X_test)
+
+# Sample data
+dataset = Supervised(name=CASE, input_dim=1, output_dim=1)
+X, y = dataset.sample(n=N, seed=SEED)
+X_test, y_test = dataset.sample_grid(n=300, seed=0)
+true_mean, true_var, true_lo, true_hi = dataset.oracle(X_test, alpha=ALPHA)
+
+with contextlib.redirect_stdout(io.StringIO()):
+    mean_pred, var_pred = run("joint", X, y, X_test, PARAMS_JOINT)
+
+RMSE_mean = np.sqrt(np.mean((mean_pred - true_mean) ** 2))
+RMSE_var = np.sqrt(np.mean((var_pred - true_var) ** 2))
+
+fig = plot_heteroscedastic(
+    X, y, X_test, None,
+    mean_pred, var_pred,
+    true_mean=true_mean, true_lo=true_lo, true_hi=true_hi,
+    alpha=ALPHA, title="",
+    rmse_mean=RMSE_mean, rmse_var=RMSE_var,
+)
+plt.show()
+plt.close(fig)
+```
+
+@fig-het-regr-joint shows the best model after cross-validation. We
+solve the joint learning problem defined in @eq-het-regr-joint-dual on
+the exact same dataset as in @sec-subsec-kSoS-only-hetregr, to estimate
+the mean and variance functions. Interestingly, when compared to the
+sequential estimation in @fig-het-regr-seq, the joint mean and
+confidence intervals are closer to the target, especially in the center.
+In the joint setting, the estimation becomes slightly rough on the
+right, but this is largely compensated by a better prediction accuracy
+in the center and in the left of the figure. Evaluating the RMSE for
+both functions on a test set of size $300$, these improvements translate
+both in smaller mean and variance RMSE compared to the sequential
+estimation in @sec-subsec-kSoS-only-hetregr. This result shows that
+jointly learning the mean and variance functions may be beneficial in
+practice.
+
+### Non-crossing multi-quantile regression
+
+We consider here the same formalism as in the quantile regression
+example in @sec-subsec-kSoS-only-multiquantile. However, this time the
+conditional median function $q_{0.5}$ is supposed to be unknown, and we
+parameterize it with a function $g$ in a RKHS $\mathcal{H}^{g}$ with
+kernel $k^{g}$ and lengthscale $\theta^{g}$. The primal and dual
+formulations are given in the following proposition.
+
+::: {#prp-multi-quantile-joint .proposition}
+Assume that $R$ is as in @eq-ridge-regularization and $\Omega_{-j}$ and
+$\Omega_{k}$ as in @eq-elastic-net-regularization with
+$\lambda^{g},\lambda^{f}_{-j2},\lambda^{f}_{k2}>0$. The non-crossing
+multi-quantile regression problem writes $$\begin{align*}
+\underset{
+\substack{ g \in \mathcal{H}^{g}\\
+\{\mathcal{A}_{-j}\}_{j=1}^{q_{-}} \in \prod_{j=1}^{q_{-}} \mathcal{S}_{+}\left(\mathcal{H}^{f}_{-j}\right)  \\
+\{\mathcal{A}_{k}\}_{k=1}^{q_{+}} \in \prod_{k=1}^{q_{+}} \mathcal{S}_{+}\left(\mathcal{H}^{f}_{k}\right) 
+}
+}{\inf} \quad& \sum_{i=1}^n \rho_{\tau_{0.5}}(y_i -  g(x_i)) + R(\Vert g \Vert_{\mathcal{H}^{g}}) \\
+\quad& + \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(y_i -  g(x_i) + \sum_{j'=1}^j f_{\mathcal{A}_{-j'}}(x_i)\right) + \sum_{j=1}^{q_{-}} \Omega_{-j}(\mathcal{A}_{-j})\\
+\quad& + \sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(y_i -  g(x_i) - \sum_{k'=1}^k f_{\mathcal{A}_{k'}}(x)\right) + \sum_{k=1}^{q_{+}} \Omega_{k}(\mathcal{A}_{k}),
+\end{align*}$$ with finite-dimensional equivalent: $$\begin{align*}
+\underset{
+\substack{ \boldsymbol{\gamma} \in \mathbb{R}^n\\
+\{\mathbf{A}_{-j}\}_{j=1}^{q_{-}} \in \prod_{j=1}^{q_{-}}\mathbb{S}_{+}^{r_{-j}}   \\
+\{\mathbf{A}_{k}\}_{k=1}^{q_{+}} \in \prod_{k=1}^{q_{+}}\mathbb{S}_{+}^{r_{k}} 
+}
+}{\inf} \quad& \sum_{i=1}^n \rho_{\tau_{0.5}}(y_i - \boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma}) + R(\sqrt{\boldsymbol{\gamma}^{\top}\mathbf{K}^{g}\boldsymbol{\gamma}})\\
+\quad& + \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(y_i - \boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma} + \sum_{j'=1}^j \tilde{f}_{\mathbf{A}_{-j'}}(x_i)\right) + \sum_{j=1}^{q_{-}} \Omega_{-j}(\mathbf{A}_{-j})\\
+\quad& + \sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(y_i -  \boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma} - \sum_{k'=1}^k \tilde{f}_{\mathbf{A}_{k'}}(x_i)\right) + \sum_{k=1}^{q_{+}} \Omega_{k}(\mathbf{A}_{k}).
+\end{align*}$$
+
+The associated dual formulation is: $$\begin{aligned}
+\underset{ \substack{
+\boldsymbol{\beta} \in [-0.5,0.5]^{n}\\
+\boldsymbol{\alpha}_{-j} \in [\tau_{-j}-1,\tau_{-j}]^{n},\; j=1,\ldots,q_{-}\\
+\boldsymbol{\alpha}_{k} \in [\tau_{k}-1,\tau_{k}]^{n},\; k=1,\ldots,q_{+}}
+}{\sup}  \quad &  \boldsymbol{y}^{\top}\left(\boldsymbol{\beta}+ \sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right) \\
+\quad & - \frac{1}{4\lambda^{g}} \left(\boldsymbol{\beta}+ \sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right)^{\top}\boldsymbol{K}^{g} \left(\boldsymbol{\beta}+ \sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right)  \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(-\sum_{l=j}^{q_{-}}\boldsymbol{\alpha}_{-l}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2  \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\sum_{l=k}^{q_{+}}\boldsymbol{\alpha}_{l}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2.
+\end{aligned}$$ {#eq-multi-quantile-joint-dual}
+:::
+
+The proof can be found in @sec-apx-learning-problems. Our
+@thm-general-representer-theorem directly applies with $p=1$ and
+$q=q_{-}+q_{+}$ to recover the primal formulation, and the dual
+formulation is obtained by computing the Fenchel conjugate of the loss
+function.\
+
+```{python}
+#| label: fig-multi-quantiles-joint
+#| fig-cap: "Non-crossing multi-quantiles regression trained with cross-validation on $n=1000$ training samples (grey). True quantiles (dashed lines) versus estimation (full lines) with free lengthscales and sequential (top row) or joint (bottom row) learning problem. Left and right panels are zoomed-in views for the boxed areas in the center."
+#| out-width: 65%
+import io
+import contextlib
+import numpy as np
+import matplotlib.pyplot as plt
+
+from dualforms.data_generation.supervised import Supervised
+from dualforms.problems.multiquantile_regression.base import MultiQuantileRegression
+from dualforms.kernels.matern import Matern
+from dualforms.plots.multiquantile import compute_true_quantiles, plot_multiquantile_comparison
+
+ZOOM_LEFT = (0.1, 2.1, -0.5, 2)
+ZOOM_RIGHT = (3.8, 5.8, -1.9, -0.2)
+
+# ── kSoS problem settings ───────────────────────────────────────────────────────────────────
+CASE = "case_2"
+N = 1000
+SEED = 3
+
+QUANTILE_LEVELS = [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]
+
+MAX_ITERS = 100_000
+GAP_TOL = 1e-2
+USE_LOW_RANK = True
+TARGET_VARIANCE = 0.995
+METHOD_LOW_RANK = "svd"
+SOLVER = "AGD"
+
+# ── Best hyperparameter combination identified by cross-validation ───
+PARAMS_SEQUENTIAL = {
+    "theta_m": 0.7,
+    "theta_qlow": 0.9,
+    "theta_qupp": 0.7,
+    "lambda_m": 1,
+    "lambda1": 1,
+    "lambda2": 1,
+}
+PARAMS_JOINT = {
+    "theta_m": 0.9,
+    "theta_qlow": 1.3,
+    "theta_qupp": 0.7,
+    "lambda_m": 1,
+    "lambda1": 1,
+    "lambda2": 1,
+}
+
+def build_model(mode, theta_m, theta_qlow, theta_qupp, lambda_m, lambda1, lambda2):
+    n_q = len(QUANTILE_LEVELS)
+    return MultiQuantileRegression(
+        mode=mode,
+        quantile_levels=QUANTILE_LEVELS,
+        median_kernel=Matern(),
+        quantile_kernels=[Matern() for _ in range(n_q)],
+        median_theta=theta_m,
+        quantile_thetas=[theta_qlow] * (n_q // 2) + [theta_qupp] * (n_q // 2),
+        lambda_m=lambda_m,
+        lambda1s=[lambda1] * n_q,
+        lambda2s=[lambda2] * n_q,
+    )
+
+def aggregate_rmse(predictions, true_quantiles):
+    return np.mean([
+        np.sqrt(np.mean((predictions[tau] - true_quantiles[tau]) ** 2))
+        for tau in predictions.keys()
+    ])
+
+def median_rmse(predictions, true_quantiles):
+    return np.sqrt(np.mean((predictions[0.5] - true_quantiles[0.5]) ** 2))
+
+def run(mode, X, y, X_test, params):
+    """
+    For a fixed training data (X,y) and feature vectors in test data X_test,
+    run a single optimization for the multi-quantile regression problem for a fixed set of hyperparameters 
+    (sequential or joint depending on mode),
+    and return the quantile predictions at each test samples.
+    """
+    model = build_model(mode, **params)
+    model.train(
+        X, y,
+        solver=SOLVER,
+        max_iters=MAX_ITERS,
+        gap_tol=GAP_TOL,
+        use_low_rank=USE_LOW_RANK,
+        target_variance=TARGET_VARIANCE,
+        method_low_rank=METHOD_LOW_RANK,
+    )
+    return model.predict(X_test)
+
+# Sample data
+dataset = Supervised(name=CASE, input_dim=1, output_dim=1)
+X, y = dataset.sample(n=N, seed=SEED)
+X_test, y_test = dataset.sample_grid(n=300, seed=0)
+true_quantiles = compute_true_quantiles(dataset, X_test, QUANTILE_LEVELS)
+
+# Run both quantile regression variants
+with contextlib.redirect_stdout(io.StringIO()):
+    predictions = {}
+    for mode, params in [("sequential", PARAMS_SEQUENTIAL), ("joint", PARAMS_JOINT)]:
+        predictions[mode] = run(mode, X, y, X_test, params)
+
+fig = plot_multiquantile_comparison(
+    X, y, X_test, y_test,
+    predictions_by_row=[predictions["sequential"], predictions["joint"]],
+    true_quantiles=true_quantiles,
+    quantile_levels=QUANTILE_LEVELS,
+    row_labels=["Sequential", "Joint"],
+    rmse_by_row=[
+        aggregate_rmse(predictions["sequential"], true_quantiles),
+        aggregate_rmse(predictions["joint"], true_quantiles),
+    ],
+    rmse_median_by_row=[
+        median_rmse(predictions["sequential"], true_quantiles),
+        median_rmse(predictions["joint"], true_quantiles),
+    ],
+    zoom_left=ZOOM_LEFT, zoom_right=ZOOM_RIGHT,
+)
+plt.show()
+plt.close(fig)
+```
+
+@fig-multi-quantiles-joint shows the best models selected by
+cross-validation for quantile levels from $0.1$ to $0.9$. In the top
+row, we show estimated quantiles in a sequential manner with free
+lengthscales for upper and lower quantiles, as done in
+@sec-subsec-kSoS-only-multiquantile. In the bottom row, the quantiles
+are jointly estimated with the conditional median function by solving
+@eq-multi-quantile-joint-dual. In the top row, we observe a good
+estimation overall: however, as shown in the left and right zoomed-in
+views, some quantiles are not estimated accurately in some areas.
+Looking at the bottom row, we see that jointly learning the median
+allows quantile levels to better adapt to the data and compensante some
+errors that were impossible to resolve because of the frozen median. The
+two zoomed-in views and the smaller RMSE clearly show that the joint
+learning problem better estimates both the median and the quantiles: we
+thus reach the same conclusion as in the heteroscedastic regression
+problem.
+
+# Conclusion {#sec-conclusion}
+
+Non-negative functions arise frequently in practice, from physical
+systems to statistics or learning in general. To capture them
+effectively, @marteauferey2020 introduced the kernel sum-of-squares
+framework, combining the rigorous non-negativity of sum-of-squares
+models with the expressiveness of kernel methods. Their framework
+originally assumed kSoS-only problems and shared RKHS for all functions.
+In this work, we extend this seminal work by introducing a generalized
+learning framework that jointly estimates unconstrained RKHS functions
+and kSoS functions, each with distinct spaces. Our main theoretical
+contribution is a generalized representer theorem that guarantees a
+finite-dimensional solution for a common class of regularization
+functions. Furthermore, for specific penalties often used in
+applications, such as ridge for RKHS functions and elastic-net for kSoS
+functions, we derive a convex dual formulation. Significantly, this dual
+eliminates positive semi-definite constraints from the optimization
+problems while reducing the number of optimization variables, allowing
+the framework to scale to large datasets. Finally, we state all our
+results in the rank-deficient setting, enabling further scaling with
+kernel low-rank approximation techniques. We illustrated this framework
+on multiple examples: in addition to deriving the missing dual
+formulations for previous kSoS-only examples, we demonstrated that the
+flexibility in the function space choice may be beneficial in practice,
+as well as the joint learning approach.
+
+The kernel sum-of-squares framework is thus a highly promising tool for
+modelling non-negative functions. By extending it to accommodate broader
+learning problems and providing accessible dual formulations, we hope to
+facilitate its adoption in practical applications. From a theoretical
+perspective, future work will focus on establishing convergence rates
+and deriving bounds for low-rank kSoS approximations. On the practical
+side, we are working on the development of a user-friendly Python
+package dedicated to kSoS to further promote them.
 
 # References {.unnumbered}
 
 ::: {#refs}
+:::
+
+# Proofs
+
+## Notations {#sec-apx-notations}
+
+We first recall the notations already introduced in
+@sec-generalized-representer-theorem which are necessary for the proofs.
+For our learning problem, we consider a collection of $p$ RKHS
+$\mathcal{H}^{g}_{l},\, l=1,\ldots,p$ and $q$ RKHS
+$\mathcal{H}^{f}_{s},\, s=1,\ldots,q$. To each RKHS
+$\mathcal{H}^{g}_{l}$ and $\mathcal{H}^{f}_{s}$ is associated a unique
+kernel $k^{g}_{l}$ and $k^{f}_{s}$ with feature map $\phi^{g}_{l}$ and
+$\phi^{f}_{s}$, respectively. For a sample $x_1,\ldots,x_n$ of features,
+we denote $\mathbf{K}^{g}_l$ the kernel matrix with elements
+$[\mathbf{K}^{g}_l]_{ij}=k^{g}_{l}(x_i,x_j)$ and
+$\boldsymbol{k}^{g}_l(x)$ the column vector defined by
+$$\begin{equation*}
+\boldsymbol{k}^{g}_l(x) = (k^{g}_{l}(x,x_1),\ldots,k^{g}_{l}(x,x_n))^\top
+\end{equation*}$$ for any $X\in\mathcal{X}$. Similarly, we introduce
+$\mathbf{K}^{f}_s$, $\boldsymbol{k}^{f}_s(x)$ and further consider a
+decomposition $\mathbf{K}^{f}_s=\mathbf{V}_s^\top \mathbf{V}_s$ with
+$\mathbf{V}_s\in \mathbb{R}^{r_{s} \times n}$ where $r_{s}$ is the rank
+of $\mathbf{K}^{f}_s$, and the empirical feature map
+$\boldsymbol{\Phi}_{s}(x) = (\mathbf{V}_{s}\mathbf{V}^{\top}_{s})^{-1}\mathbf{V}_{s}\boldsymbol{k}^{f}_{s}(x)$.
+If $r_{s}=n$, such decomposition can be obtained with a Cholesky
+decomposition, while if $r_s <n$ we can consider
+$\mathbf{V}_{s}=\boldsymbol{\Sigma}_{s}^{1/2} \mathbf{U}_{s}^{\top}$
+where $\boldsymbol{\Sigma}_{s}\in\mathbb{R}^{r_{s}\times r_{s}}$ is
+diagonal and $\mathbf{U}_{s}\in\mathbb{R}^{n\times r_{s}}$ such that
+$\mathbf{U}_{s}^{\top}\mathbf{U}_{s}=\mathbf{I}_{r_{s}}$ is semi-unitary
+obtained through the economy eigendecomposition
+$\mathbf{K}^{f}_{s}=\mathbf{U}_{s}\boldsymbol{\Sigma}_{s}\mathbf{U}_{s}^{\top}$.
+
+Next, for a Hilbert space $\mathcal{H}$ we write
+$\mathcal{S}(\mathcal{H})$ the set of bounded Hermitian linear operators
+from $\mathcal{H}$ to $\mathcal{H}$ and $\mathcal{S}_{+}(\mathcal{H})$
+those that are positive semi-definite. We also write
+$\mathbb{S}^{r} := \mathbb{S}\left(\mathbb{R}^{r\times r}\right)$ the
+set of real and symmetric matrices of size $r$, and
+$\mathbb{S}_{+}^{r} := \mathbb{S}_{+}\left(\mathbb{R}^{r\times r}\right)$
+the set of real, symmetric and positive semi-definite matrices of size
+$r$.
+
+For convenience, we denote
+
+- The $p$ *unknown* real-valued functions
+  $g_{l}:\; \mathcal{X} \to \mathbb{R}$ in a RKHS $\mathcal{H}^{g}_{l}$
+  for $l=1,\ldots,p$
+
+- The $q$ *unknown* kernel sum-of-squares (kSoS) functions
+  $f_{\mathcal{A}_{s}}:\; \mathcal{X} \to \mathbb{R}^{+}$ parameterized
+  by a positive semi-definite operator
+  $\mathcal{A}_{s}\in\mathcal{S}_{+}(\mathcal{H}^{f}_{s})$ defined on a
+  RKHS $\mathcal{H}^{f}_{s}$ with
+  $f_{\mathcal{A}_{s}}(x) = \langle\phi^{f}_{s}(x), \mathcal{A}_{s}\phi^{f}_{s}(x)\rangle_{\mathcal{H}^{f}_{s}}$
+  for $s=1,\ldots,q$
+
+- The collection of RKHS functions
+  $g:=(g_1,\ldots,g_p)\in \mathcal{K}^{g}(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}):= \mathcal{H}^{g}_{1}\times\dots\times\mathcal{H}^{g}_{p}$
+
+- The collection of operators
+  $\mathcal{A}:=(\mathcal{A}_{1},\dots,\mathcal{A}_{q})\in \mathcal{K}^{f}(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q}):= \mathcal{S}_{+}(\mathcal{H}^{f}_{1})\times\dots\times\mathcal{S}_{+}(\mathcal{H}^{f}_{q})$
+
+- The collection of RKHS function evaluations
+  $g(x):=(g_1(x),\ldots,g_p(x))\in \mathbb{R}^{p}, \; \forall x\in\mathcal{X}$
+
+- The collection of kSoS function evaluations
+  $f_{\mathcal{A}}(x) := f_{\mathcal{A}_1, \ldots, \mathcal{A}_q}(x) = \left(f_{\mathcal{A}_1}(x), \ldots, f_{\mathcal{A}_q}(x)\right) \in \mathbb{R}_{+}^{q}, \; \forall x\in\mathcal{X}$
+
+Finally, we consider specific regularizers
+$R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big)$ for RKHS
+functions and $\Omega_{s}(\mathcal{A}_{s})$ for kSoS functions which
+satisfy @cnj-R and @cnj-omega, respectively.
+
+## Representer theorem {#sec-apx-rep_th}
+
+In this section, to prove @thm-general-representer-theorem, we closely
+follow the proof of @marteauferey2020 [Section B.3] and @allain2026
+[Theorem A.2] and it is built in two parts. First,
+@prp-apx-result-in-finite-dim below shows that the solution of the
+infinite-dimensional problem of
+@eq-rkhs-and-ksos-regularized-learning-problem lies in a space of
+finite-dimension. Then, we conclude by showing that this solution can be
+written as in @eq-solution-parameters: this directly follows from
+[@allain2026 Lemma A.5] and classical representation results for
+functions in an RKHS, see @steinwart2008 [Theorem 5.5], @scholkopf2002
+[Theorem 4.2] or @mohri2012 [Theorem 6.11]. Before stating
+@prp-apx-result-in-finite-dim, we need additional notations for the
+spaces associated with the RKHS functions and the kSoS ones:
+
+- For every Hilbert space $\mathcal{H}^{g}_{l}$, we write
+  $\mathcal{H}^{g}_{nl}$ for the finite-dimensional subspace of
+  $\mathcal{H}^{g}_{l}$ generated by
+  $\{(\phi^{g}_{l}(x_i))_{1\leq i\leq n}\}$, and define $P_{nl}$ the
+  orthogonal projection onto $\mathcal{H}^{g}_{nl}$ such that
+  $$\begin{equation*}
+  P_{nl} \in \mathcal{S}(\mathcal{H}^{g}_{l}), \quad P_{nl}^{2}=P_{nl},\quad \mathrm{range}(P_{nl}) = \mathcal{H}^{g}_{nl}.
+  \end{equation*}$$ For
+  $g = \left(g_1, \ldots, g_p\right) \in \mathcal{K}^{g}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p})$,
+  we define its projection
+  $g_{\parallel} := (P_{n1}g_1, \ldots, P_{np}g_p)$ onto
+  $\mathcal{K}^{g}_{n}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p}) := \left\{g_{\parallel} \colon \; g \in \mathcal{K}^{g}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p}) \right\}$
+  with $g = g_{\parallel} + g_{\perp}$. Observe that we have the
+  inclusion
+  $\mathcal{K}^{g}_{n}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p}) \subset \mathcal{K}^{g}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p})$.
+
+- Similarly for every Hilbert space $\mathcal{H}^{f}_s$, we write
+  $\mathcal{H}^{f}_{ns}$ for the finite-dimensional subspace of
+  $\mathcal{H}^{f}_s$ generated by
+  $\{(\phi^{f}_{s}(x_i))_{1\leq i\leq n}\}$, and define $\Pi_{ns}$ the
+  orthogonal projection onto $\mathcal{H}^{f}_{ns}$ such that
+  $$\begin{equation*}
+  \Pi_{ns} \in \mathcal{S}(\mathcal{H}^{f}_s), \quad \Pi_{ns}^{2}=\Pi_{ns},\quad \mathrm{range}(\Pi_{ns}) = \mathcal{H}^{f}_{ns}.
+  \end{equation*}$$ We further denote $$\begin{equation*}
+  \mathcal{K}_{n}^{f}(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q) := \left\{\left(\Pi_{n1}\mathcal{A}_1\Pi_{n1}, \ldots, \Pi_{nq}\mathcal{A}_q\Pi_{nq}\right)\colon \; \left(\mathcal{A}_1, \ldots, \mathcal{A}_q\right) \in \mathcal{K}^{f}\left(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q\right) \right\}
+  \end{equation*}$$ and since
+  $\Pi_{ns}\mathcal{A}_{s}\Pi_{ns} \in \mathcal{S}_{+}(\mathcal{H}^{f}_{s}),\; \forall s=1,\ldots,q$,
+  we have the inclusion
+  $\mathcal{K}_{n}^{f}(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q) \subset \mathcal{K}^{f}(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q)$.
+
+Finally, we denote the objective function $$\begin{equation*}
+J(g,\mathcal{A}):= L\left(g(x_1),\ldots,g(x_n),
+f_{\mathcal{A}}(x_1),\ldots,f_{\mathcal{A}}(x_n)\right)
++ \sum_{l=1}^{p}R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big) 
++ \sum_{s=1}^{q}\Omega_{s}(\mathcal{A}_{s}).
+\end{equation*}$$
+
+::: {#prp-apx-result-in-finite-dim .proposition}
+Let $L$ be a a lower semi-continuous loss function and $R_{l}$,
+$\Omega_{s}$ regularizers that satisfy @cnj-R and @cnj-omega
+respectively. Under the assumption that $J(g,\mathcal{A})$ is coercive,
+the problem $$\begin{equation*}
+\inf_{\substack{g \in \mathcal{K}^{g}(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \\
+\mathcal{A}\in \mathcal{K}^{f}(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})}} L\left(g(x_1),\ldots,g(x_n),
+f_{\mathcal{A}}(x_1),\ldots,f_{\mathcal{A}}(x_n)\right)
++ \sum_{l=1}^{p}R_{l}\big(\lVert g_{l}\rVert_{\mathcal{H}^{g}_{l}}\big) 
++ \sum_{s=1}^{q}\Omega_{s}(\mathcal{A}_{s})
+\end{equation*}$$ admits a solution
+$(g^{\star}, \mathcal{A}^{\star}) \in \mathcal{K}^{g}_{n}(\mathcal{H}^{g}_{1}, \ldots, \mathcal{H}^{g}_{p}) \times \mathcal{K}_{n}^{f}(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q)$.
+:::
+
+::: proof
+The proof follows the same three main steps as in @allain2026
+[Proposition A.4], but that we carefully adapt to handle the additional
+RKHS functions:
+
+- We first show that the objective function does not increase when
+  restricting to the finite-dimensional space, meaning that
+  $$\begin{equation*}
+  \inf_{\substack{g \in \mathcal{K}^{g}(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \\
+  \mathcal{A}\in \mathcal{K}^{f}(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})}} J(g,\mathcal{A}) = 
+  \inf_{\substack{g \in \mathcal{K}^{g}_n(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \\
+  \mathcal{A}\in \mathcal{K}^{f}_n(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})}} J(g,\mathcal{A}).
+  \end{equation*}$$
+
+- Second, we show that if the minimum exists, then it has bounded norm.
+
+- Finally, we show that such a minimum exists.
+
+**First step.**
+
+As for the kSoS part of the learning problem, @allain2026 show that the
+objective function does not increase when projecting the operator
+$\mathcal{A}$ to
+$\mathcal{K}_{n}^{f}(\mathcal{H}^{f}_1, \ldots, \mathcal{H}^{f}_q)$
+under @cnj-omega. In addition, following the classical representer
+theorem proof [@steinwart2008 Theorem 5.5], [@scholkopf2002 Theorem 4.2]
+or [@mohri2012 Theorem 6.11], we have
+$g(x_i) = g_{\parallel}(x_i),\; \forall i=1,\ldots,n$ and
+$\lVert g_{l} \rVert_{\mathcal{H}^{g}_{l}} = \sqrt{\lVert g_{l \parallel} \rVert_{\mathcal{H}^{g}_{l}}^{2} + \lVert g_{l \perp} \rVert_{\mathcal{H}^{g}_{l}}^{2}} \geq \lVert g_{l \parallel} \rVert_{\mathcal{H}^{g}_{l}}, \forall l=1,\ldots,p$.
+The first step then follows since all $R_{l}$ are increasing functions
+by @cnj-R.
+
+**Second step.**
+
+The key idea is to show that we can replace
+$\mathcal{K}^{g}_n(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \times \mathcal{K}^{f}_n(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})$
+with $$\begin{equation*}
+\mathcal{K}_{R_0} := \left\{ (\tilde{g}, \tilde{\mathcal{A}}) \in \mathcal{K}^{g}(\mathcal{H}^{g}_{n1},\dots,\mathcal{H}^{g}_{np})\times\mathcal{K}^{f}(\mathcal{H}^{f}_{n1},\dots,\mathcal{H}^{f}_{nq})\colon\, \max (\max_{1\leq l\leq p}\lVert\tilde{g}_{l}\rVert_{\mathcal{H}^{g}_{nl}}, \max_{1\leq s\leq q}\lVert\tilde{\mathcal{A}}_{s}\rVert_{F})\leq R_0 \right\}
+\end{equation*}$$ for some constant $R_0 \geq 0$. First, define for
+$1\leq l \leq p$ the injections
+$U_{nl}\colon \mathcal{H}^{g}_{nl} \rightarrow \mathcal{H}^{g}_{l}$ with
+$U_{nl}U_{nl}^{\star} = P_{nl}$ and
+$U_{nl}^{\star}U_{nl} = \mathbf{I}_{\mathcal{H}^{g}_{nl}}$, and for
+$1\leq s\leq p$ the injections
+$V_{ns}\colon \mathcal{H}^{f}_{ns} \rightarrow \mathcal{H}^{f}_{s}$ with
+$V_{ns}V_{ns}^{\star} = \Pi_{ns}$ and
+$V_{ns}^{\star}V_{ns} = \mathbf{I}_{\mathcal{H}^{f}_{ns}}$. By
+definition we thus have: $$\begin{equation*}
+\inf_{\substack{g \in \mathcal{K}^{g}_n(\mathcal{H}^{g}_{1},\dots,\mathcal{H}^{g}_{p}) \\
+\mathcal{A}\in \mathcal{K}^{f}_n(\mathcal{H}^{f}_{1},\dots,\mathcal{H}^{f}_{q})}} J(g,\mathcal{A}) = \inf_{\substack{\tilde{g} \in \mathcal{K}^{g}(\mathcal{H}^{g}_{n1},\dots,\mathcal{H}^{g}_{np})\\
+\tilde{\mathcal{A}}\in\mathcal{K}^{f}(\mathcal{H}^{f}_{n1},\dots,\mathcal{H}^{f}_{nq})}} J((U_{nl}\tilde{g}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star})_{1 \leq s \leq q}).
+\end{equation*}$$ Now, in the objective function $J$, the regularization
+parts are invariant up to the injections: since all $U_{nl}$ are linear
+isometries the norm of $\tilde{g}_l$ is unchanged, and this is also the
+case for the kSoS regularizers $\Omega_s$ if they satisfy @cnj-omega,
+see @allain2026 [Lemma A.3]. This means that for any
+$(\tilde{g},\tilde{\mathcal{A}})\in\mathcal{K}^{g}(\mathcal{H}^{g}_{n1},\dots,\mathcal{H}^{g}_{np})\times\mathcal{K}^{f}(\mathcal{H}^{f}_{n1},\dots,\mathcal{H}^{f}_{nq})$,
+$$\begin{align*}
+J((U_{nl}\tilde{g}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star})_{1 \leq s \leq q}) &= L((U_{nl}\tilde{g}_{l}(x_i))_{1\leq i \leq n,\, 1\leq l \leq p},\, (f_{V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star}}(x_i))_{1\leq i \leq n,\, 1\leq s \leq q})\\
+&+ \sum_{l=1}^{p}R_{l}\big(\lVert \tilde{g}_{l}\rVert_{\mathcal{H}^{g}_{l}}\big) 
++ \sum_{s=1}^{q}\Omega_{s}(\tilde{\mathcal{A}}_{s}).
+\end{align*}$$ Let $\tilde{g}^{0}_l,\; \tilde{\mathcal{A}}^{0}_{s}$ be
+such that
+$J_0=J((U_{nl}\tilde{g}^{0}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}^{0}_{s}V_{ns}^{\star})_{1 \leq s \leq q}) < +\infty$.
+Because $J$ is coercive, there exists $R_0 \geq 0$ such that
+$\max (\max_{1\leq l\leq p}\lVert\tilde{g}_{l}\rVert_{\mathcal{H}^{g}_{nl}}, \max_{1\leq s\leq q}\lVert\tilde{\mathcal{A}}_{s}\rVert_{F})\geq R_0$
+implies $$\begin{equation*}
+J((U_{nl}\tilde{g}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star})_{1 \leq s \leq q}) \geq J_0,
+\end{equation*}$$ which shows that $$\begin{equation*}
+\inf_{\substack{\tilde{g} \in \mathcal{K}^{g}(\mathcal{H}^{g}_{n1},\dots,\mathcal{H}^{g}_{np})\\
+\tilde{\mathcal{A}}\in\mathcal{K}^{f}(\mathcal{H}^{f}_{n1},\dots,\mathcal{H}^{f}_{nq})}} J((U_{nl}\tilde{g}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star})_{1 \leq s \leq q})=\inf_{(\tilde{g},\tilde{\mathcal{A}})\in \mathcal{K}_{R_0}} J((U_{nl}\tilde{g}_{l})_{1\leq l \leq p},\, (V_{ns}\tilde{\mathcal{A}}_{s}V_{ns}^{\star})_{1 \leq s \leq q}).
+\end{equation*}$$
+
+**Third step.**
+
+We conclude by showing that this last minimization problem has a
+solution: indeed, the objective function is lower semi-continuous, and
+hence reaches its minimum on any non-empty compact set. Since the set
+$\mathcal{K}_{R_0}$ is compact because
+$\mathcal{K}^{g}(\mathcal{H}^{g}_{n1},\dots,\mathcal{H}^{g}_{np})\times\mathcal{K}^{f}(\mathcal{H}^{f}_{n1},\dots,\mathcal{H}^{f}_{nq})$
+is finite, and non-empty because it contains
+$\tilde{g}^{0}_l,\; \tilde{\mathcal{A}}^{0}_{s}$, the result directly
+follows.
+:::
+
+::: {#rem-apx-bounded-below .remark}
+If the loss function $L$ is bounded below and the individual
+regularizers $R_{l}$, $\Omega_{s}$ satisfy @cnj-R and @cnj-omega
+respectively, the objective $J$ is trivially coercive. In
+@marteauferey2020, they consider a bounded below loss function together
+with @cnj-omega to derive their representer theorem. Here, we use a more
+general assumption that allows to consider a larger class of learning
+problems, such as heteroscedastic regression with unknown mean which
+involves an unbounded loss function, see @sec-apx-learning-problems.
+:::
+
+## Dual formulation {#sec-apx-dual}
+
+To prove @thm-general-dual-formulation, we follow @marteauferey2020 and
+use Theorem $3.3.5$ from @borwein2006. With the notations of
+@borwein2006, Problem -@eq-thm-rep-formulation-A can be written as the
+primal formulation: $$\begin{equation*}
+p^{\star}=\underset{
+x \in E
+}{\inf} \;
+f(x) + g(Ax)
+\end{equation*}$$ where
+
+- $x=(\boldsymbol{\gamma}_1,\ldots,\boldsymbol{\gamma}_p,\mathbf{A}_1,\ldots,\mathbf{A}_q)\in E = (\mathbb{R}^n)^p\times\mathbb{S}^{r_1}\times\ldots\times\mathbb{S}^{r_q}$
+
+- $f(\boldsymbol{\gamma}_1,\ldots,\boldsymbol{\gamma}_p,\mathbf{A}_1,\ldots,\mathbf{A}_q)=\sum_{l=1}^{p} \lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l + \sum_{s=1}^{q}\Omega_{s}^{+}(\mathbf{A}_{s})$
+  where $$\begin{equation*}
+  \Omega_{s}^{+}(\mathbf{A}) = \begin{cases}
+  \Omega_{s}(\mathbf{A}) \quad &\mathrm{if} \; \mathbf{A} \succeq 0 \\
+  + \infty &\mathrm{otherwise}
+  \end{cases}
+  \end{equation*}$$
+
+- For $(y,z)\in Y = (\mathbb{R}^n)^p\times(\mathbb{R}^n)^q$,
+  $g(y,z)=L(y,z)$
+
+- $A:\; E \mapsto Y$ is the linear map defined by $$\begin{equation*}
+  A(\boldsymbol{\gamma}_1,\ldots,\boldsymbol{\gamma}_p,\mathbf{A}_1,\ldots,\mathbf{A}_q) = ((\boldsymbol{k}^{g}_{l}(x_i)^{\top}\boldsymbol{\gamma}_{l})_{1\leq i \leq n,\, 1\leq l \leq p},\,(\tilde{f}_{\mathbf{A}_{s}}(x_i))_{1\leq i \leq n,\, 1\leq s \leq q}))
+  \end{equation*}$$
+
+The associated dual problem is $$d^{\star}=\underset{
+\phi \in Y
+}{\sup} \;
+-f^{\star}(A^{\star}\phi) - g^{\star}(-\phi)$$ {#eq-apx-dual-bw} and if
+$A\textrm{dom}\,f \cap \textrm{cont}\, g \neq \emptyset$,
+$p^{\star}=d^{\star}$ as long as $f$ and $g$ are convex. This is the
+case here: (a) $f$ is convex as the sum of convex functions, (b) $g$ is
+convex since we have assumed that the loss function $L$ is convex and
+(c) we have also assumed that there exist
+$\boldsymbol{\gamma}^0_l\in\mathbb{R}^n,\, \mathbf{A}^0_s\in\mathbb{S}_{+}^{r_s}$
+such that $L$ is continuous in
+$(\boldsymbol{k}^{g}_{l}(x_i)^{\top}\boldsymbol{\gamma}^0_{l})_{1\leq i \leq n,\, 1\leq l \leq p}$.
+In addition, by our previous results, the primal problem is coercive and
+proper, yielding a finite minimum $p^{\star}$: since strong duality
+holds, $d^{\star}$ is thus finite and Theorem $3.3.5$ from @borwein2006
+guarantees that the dual supremum is attained.
+
+We now need to derive $f^{\star}$ and $A^{\star}$ (recall that
+$g^{\star}=L^{\star}$ by definition). First, we denote the components of
+$\phi\in Y$ as
+$\phi=(\boldsymbol{\beta}_{1},\ldots,\boldsymbol{\beta}_{p},\boldsymbol{\alpha}_{1}, \ldots, \boldsymbol{\alpha}_{q})$,
+and by separability it holds that
+$A^{\star}\phi=((\mathbf{K}^{g}_{l}\boldsymbol{\beta}_{l})_{1\leq l \leq p},(\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top})_{1\leq s \leq q})$.
+The first components of $A^{\star}$ readily come from the adjoint of
+$\boldsymbol{k}^{g}_{l}(x_i)^{\top}\boldsymbol{\gamma}_{l}$, while the
+second ones were derived in @marteauferey2020. For $f^{\star}$, let us
+write $$\begin{equation*}
+f^{\star}(\boldsymbol{\gamma}_1^{\star},\ldots,\boldsymbol{\gamma}_p^{\star},\mathbf{A}_1^{\star},\ldots,\mathbf{A}_q^{\star})=\sum_{l=1}^p R_{l}^{\star}(\boldsymbol{\gamma}_l^{\star}) + \sum_{s=1}^q (\Omega_{s}^{+})^{\star}(\mathbf{A}_{s}^{\star}).
+\end{equation*}$$ For
+$R_{l}(\boldsymbol{\gamma}_l)=\lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l$,
+it is straightforward to show that
+$R_{l}^{\star}(\boldsymbol{\gamma}_l^{\star})=\frac{1}{4\lambda^{g}_{l}}(\boldsymbol{\gamma}_l^{\star})^{\top} (\mathbf{K}^{g}_l)^{\dagger}\boldsymbol{\gamma}_l^{\star}$
+where $\mathbf{M}^{\dagger}$ denotes the Moore-Penrose pseudo inverse of
+$\mathbf{M}$. On the other hand, for
+$\Omega_s(\mathbf{A}) = \lambda^{f}_{s1} \lVert\mathbf{A}\rVert_{\star}+\lambda^{f}_{s2}\lVert\mathbf{A}\rVert_{F}^{2}$,
+we have
+$$(\Omega_{s}^{+})^{\star}(\mathbf{A}_{s}^{\star}) = \frac{1}{4\lambda^{f}_{s2}} \left\lVert \left[\mathbf{A}_{s}^{\star} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_+\right\rVert_F^2,$$ {#eq-omega_star}
+see @marteauferey2020. This implies that $$\begin{align*}
+f^{\star}(A^{\star}\phi) &= f^{\star}((\mathbf{K}^{g}_{l}\boldsymbol{\beta}_{l})_{1\leq l \leq p},(\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top})_{1\leq s \leq q})\\
+&= \sum_{l=1}^p \frac{1}{4\lambda^{g}_{l}} \boldsymbol{\beta}_{l}^{\top} \mathbf{K}^{g}_{l} (\mathbf{K}^{g}_{l})^{\dagger} \mathbf{K}^{g}_{l}\boldsymbol{\beta}_{l} + \sum_{s=1}^q \frac{1}{4\lambda^{f}_{s2}} \left\lVert \left[\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_+\right\rVert_F^2 \\
+&= \sum_{l=1}^p \frac{1}{4\lambda^{g}_{l}} \boldsymbol{\beta}_{l}^{\top} \mathbf{K}^{g}_{l}\boldsymbol{\beta}_{l} + \sum_{s=1}^q \frac{1}{4\lambda^{f}_{s2}} \left\lVert \left[\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_+\right\rVert_F^2
+\end{align*}$$ and the dual formulation in @thm-general-dual-formulation
+follows by replacing $\phi$ with
+$(\boldsymbol{\beta}_{1},\ldots,\boldsymbol{\beta}_{p},\boldsymbol{\alpha}_{1}, \ldots, \boldsymbol{\alpha}_{q})$
+in @eq-apx-dual-bw.
+
+Finally, to recover the primal solutions, we again follow
+@marteauferey2020 and @borwein2006 [Exercise 4.2.17]: if $f$ and $g$ are
+closed, then the primal solution $\bar{x}$ is given by
+$\bar{x}=\nabla f^{\star}(A^{\star}\bar{\phi})$ for $\bar{\phi}$ an
+optimal dual solution. Since $L$ is a proper convex function which is
+lower semi-continuous, then it is closed. Besides,
+$\lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l,\; \Omega_{s}^{+}(\mathbf{A}_{s}^{\star})$
+are also closed convex functions. By separability, we obtain
+Equations -@eq-recover-g and -@eq-recover-A by computing
+$\nabla f^{\star}$, where the latter is given in @marteauferey2020:
+$$\nabla((\Omega_s^{+})^{\star})(\mathbf{A}_s^{\star}) = \frac{1}{2\lambda^{f}_{s2}} \left[\mathbf{A}_{s}^{\star} - \lambda^{f}_{s1} \mathbf{I}_{r_s}\right]_+$$ {#eq-grad_omega_star}
+and is trivial for
+$\lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l$.\
+
+We can also easily extend the previous dual formulation to accommodate
+for potential additional linear terms in the objective function, as
+elaborated in the following corollary.
+
+::: {#cor-apx-dual-formulation-linear .corollary}
+Consider a new instance of Problem -@eq-thm-rep-formulation-A where we
+add to the objective function an additional term
+$\sum_{s=1}^q \mathop{\mathrm{Tr}}(\mathbf{A}_{s}\mathbf{W}_{s})$ for
+some matrices $\mathbf{W}_{s}\in\mathbb{R}^{r_s\times r_s}$. Then, this
+new problem also satisfies @prp-formulation-A and under the same
+assumptions of @thm-general-dual-formulation, it has the following dual
+formulation: $$\begin{align*}
+\sup_{\substack{\boldsymbol{\alpha}_{1}, \ldots, \boldsymbol{\alpha}_{q}\in\mathbb{R}^n\\ \boldsymbol{\beta}_{1},\ldots,\boldsymbol{\beta}_{p} \in \mathbb{R}^n}} & -L^{\star}((-\boldsymbol{\beta}_{l})_{1\leq l \leq p},(-\boldsymbol{\alpha}_{s})_{1\leq s \leq q}) - \sum_{l=1}^p \frac{1}{4\lambda^{g}_{l}} \boldsymbol{\beta}_{l}^{\top} \mathbf{K}^{g}_{l} \boldsymbol{\beta}_{l} \\
+& - \sum_{s=1}^q \frac{1}{4\lambda^{f}_{s2}} \lVert [\mathbf{V}_{s}\mathrm{Diag}(\boldsymbol{\alpha}_{s})\mathbf{V}_{s}^{\top} - \lambda^{f}_{s1} \mathbf{I}_{r_s}-\mathbf{W}_{s}]_+\rVert_F^2.
+\end{align*}$$
+:::
+
+::: proof
+The proof is the same as for @thm-general-dual-formulation, except that
+here we have $$\begin{align*}
+f(\boldsymbol{\gamma}_1,\ldots,\boldsymbol{\gamma}_p,\mathbf{A}_1,\ldots,\mathbf{A}_q)&=\sum_{l=1}^{p} \lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l + \sum_{s=1}^{q} \left(\Omega_{s}^{+}(\mathbf{A}_{s}) + \mathop{\mathrm{Tr}}(\mathbf{A}_{s}\mathbf{W}_{s})\right)\\
+&= \sum_{l=1}^{p} \lambda^{g}_{l} \boldsymbol{\gamma}^{\top}_l \mathbf{K}^{g}_l \boldsymbol{\gamma}_l + \sum_{s=1}^{q} \widetilde{\Omega}_{s}(\mathbf{A}_{s}),
+\end{align*}$$ which satisfies all the required assumptions as before.
+The only difference is in the computation of $f^{\star}$. The first part
+is unchanged, and for the second one we have $$\begin{align*}
+\widetilde{\Omega}_{s}^{\star}(\mathbf{A}_{s}^{\star}) &= \underset{\mathbf{A}_{s}\in \mathbb{S}_{+}^{r_{s}}}{\sup} \mathop{\mathrm{Tr}}(\mathbf{A}_{s}\mathbf{A}_{s}^{\star}) - \widetilde{\Omega}_{s}(\mathbf{A}_{s})\\
+&= \underset{\mathbf{A}_{s}\in \mathbb{S}_{+}^{r_{s}}}{\sup} \mathop{\mathrm{Tr}}(\mathbf{A}_{s}\mathbf{A}_{s}^{\star}) - \Omega_{s}^{+}(\mathbf{A}_{s}) - \mathop{\mathrm{Tr}}(\mathbf{A}_{s}\mathbf{W}_{s})\\
+&= \underset{\mathbf{A}_{s}\in \mathbb{S}_{+}^{r_{s}}}{\sup} \mathop{\mathrm{Tr}}(\mathbf{A}_{s}(\mathbf{A}_{s}^{\star}-\mathbf{W}_{s})) - \Omega_{s}^{+}(\mathbf{A}_{s})\\
+&= (\Omega_{s}^{+})^{\star}(\mathbf{A}_{s}^{\star}-\mathbf{W}_{s}).
+\end{align*}$$
+:::
+
+## Specific learning problems {#sec-apx-learning-problems}
+
+**Proof of @prp-het-regr-known-mean (heteroscedastic regression with
+known mean).**
+
+In this setting, we have $p=0$ and $q=1$. Since $v(\cdot)>0$,
+$t_i \neq 0$ and thus the loss function
+$L(u_1,\ldots,u_n)=\sum_{i=1}^n t_i u_i - \sum_{i=1}^n \log(u_i)$ is
+bounded below. Since it is trivially lower semi-continuous, it satisfies
+the assumptions of @thm-general-representer-theorem (see
+@rem-apx-bounded-below), which yields the finite-dimensional
+representation. In addition, $\Omega$ is strongly convex and
+@prp-formulation-A applies. Now, $L$ is continuous in
+$(\tilde{f}_{\mathbf{A}^0}(x_i))_{1\leq i \leq n}$ for e.g.
+$\mathbf{A}^{0}=\mathbf{I}_r$ and is convex, such that
+@thm-general-dual-formulation holds and the only remaining part is to
+compute $L^{\star}$. Since
+$L(u_1,\ldots,u_n)=\sum_{i=1}^n t_i u_i - \sum_{i=1}^n \log(u_i) = \sum_{i=1}^n l_i(u_i)$
+with $l_i(u)= t_i u - \log(u)$ is separable, we have
+$L^{\star}(-\boldsymbol{\alpha})=\sum_{i=1}^n l_i^{\star}(-\alpha_i)$.
+But
+$l_i^{\star}(-\alpha_i)=\left[t_i u - \log(u)\right]^{\star}(-\alpha_i) = \left[-\log(u)\right]^{\star}(-\alpha_i-t_i) = -(1+\log(\alpha_i+t_i))$
+for $\alpha_i+t_i > 0$, yielding
+$-L^{\star}(-\boldsymbol{\alpha})= \sum_{i=1}^n (1+\log(\alpha_i+t_i)) = n + \sum_{i=1}^n \log(\alpha_i+t_i)$
+and the dual formulation follows by plugging
+$-L^{\star}(-\boldsymbol{\alpha})$ in @eq-general_dual.
+
+**Proof of @prp-het-regr (heteroscedastic regression with unknown
+mean).**
+
+We have $p=1$ and $q=1$, but contrary to the proof of
+@prp-het-regr-known-mean this time the loss function, although lower
+semi-continuous, is not bounded below. However, the objective
+$J(g,\mathcal{A})$ is coercive. Indeed,
+$f_{\mathcal{A}}(x_i) = \langle \phi^{f}(x_i), \mathcal{A} \phi^{f}(x_i) \rangle_{\mathcal{H}^{f}} \le \lVert\mathcal{A}\rVert_{\star} \lVert \phi^{f}(x_i)\rVert_{\mathcal{H}^{f}}^2 = \lVert\mathcal{A}\rVert_{\star} k^{f}(x_i, x_i)$.
+Let $C = \max_i k^{f}(x_i, x_i) < + \infty$. We can then lower bound the
+objective: $$\begin{align*}
+J(g,\mathcal{A}) & \geq 0 - \sum_{i=1}^n \log(C \lVert\mathcal{A}\rVert_{\star}) + R(\lVert g\rVert_{\mathcal{H}^{g}}) + \Omega(\mathcal{A}) \\
+&= R(\lVert g\rVert_{\mathcal{H}^{g}}) + \Omega(\mathcal{A}) - n\log(\lVert\mathcal{A}\rVert_{\star}) - n \log(C) \\
+&= R(\lVert g\rVert_{\mathcal{H}^{g}}) + \lambda^{f}_{1} \lVert\mathcal{A}\rVert_{\star}+\lambda^{f}_{2}\lVert\mathcal{A}\rVert_{F}^{2} - n\log(\lVert\mathcal{A}\rVert_{\star}) - n \log(C).
+\end{align*}$$ Since $\lambda^{f}_{1}>0$,
+$\lVert\mathcal{A}\rVert_{\star}$ dominates
+$\log(\lVert\mathcal{A}\rVert_{\star})$ which implies that when
+$\lVert\mathcal{A}\rVert_{F}^{2}$ goes to infinity
+$J(g,\mathcal{A}) \to + \infty$ since
+$\lVert\mathcal{A}\rVert_{F} \leq \lVert\mathcal{A}\rVert_{\star}$ by
+monotonicity of the Schatten norms. Furthermore, because
+$\lVert g \rVert \to \infty$, $R(\lVert g \rVert) \to \infty$ by
+assumption, the objective $J(g, \mathcal{A}) \to +\infty$ as either
+$\lVert g \rVert \to \infty$ or $\lVert\mathcal{A}\rVert_{F}^{2}$, and
+therefore $J$ is coercive and satisfies the assumptions of
+@thm-general-representer-theorem. On the other hand, since
+$\lambda^{f}_{2}>0$, $\Omega$ is strictly convex and @prp-formulation-A
+holds. For the dual formulation in @thm-general-dual-formulation, $L$ is
+continuous in
+$(\boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma}^0)_{1\leq i \leq n}$
+and $(\tilde{f}_{\mathbf{A}^0}(x_i))_{1\leq i \leq n}$ for e.g.
+$\boldsymbol{\gamma}^0=0,\, \mathbf{A}^0=\mathbf{I}_{r}$. For
+$\mathbf{u},\mathbf{v}\in\mathbf{R}^n$, denote
+$L(\mathbf{u},\mathbf{v})=L(u_1,\ldots,u_n,v_1,\ldots,v_n)= \sum_{i=1}^n (y_i^2 v_i + \frac{u_i^2}{v_i} - 2 y_i u_i - \log(v_i))=\sum_{i=1}^n l_i(u_i,v_i)$
+with $l_i(u,v) = y_i^2 v + \frac{u^2}{v} - 2 y_i u - \log(v)$. By
+separability,
+$L^{\star}(-\boldsymbol{\beta},-\boldsymbol{\alpha})=\sum_{i=1}^n l_i^{\star}(-\beta_i,-\alpha_i)$.
+In addition, $$\begin{align*}
+l_i^{\star}(u^{\star},v^{\star}) &= \underset{u\in\mathbb{R},\, v>0}{\sup}\quad u u^{\star} + v v^{\star} - y_i^2 v -\frac{u^2}{v} + 2 y_i u +\log(v) \\
+&= \underset{u\in\mathbb{R},\,v>0}{\sup}\quad h(u) + (v^{\star} - y_i^2) v +\log(v)
+\end{align*}$$ with $h(u) = (u^{\star} + 2 y_i) u - \frac{u^2}{v}$,
+which attains its maximum at $u =(u^{\star} + 2y_i)v/2$, such that
+$$\begin{align*}
+l_i^{\star}(u^{\star},v^{\star}) &= \underset{v>0}{\sup}\quad \frac{(u^{\star} + 2y_i)^2 v}{4}+ (v^{\star}-y_i^2) v + \log(v) \\
+&= \underset{v>0}{\sup}\quad \xi  v +\log(v)\\
+&= \left[ -\log(v)\right]^{\star}(\xi) = -(1+\log(-\xi))
+\end{align*}$$ for
+$\xi = \frac{(u^{\star} + 2y_i)^2}{4}+ (v^{\star}-y_i^2)=(u^{\star})^2/4 + y_i u^{\star}  + v^{\star} < 0$.
+This yields
+$- L^{\star}(-\boldsymbol{\beta},-\boldsymbol{\alpha})=\sum_{i=1}^n (1+\log\left(\beta_i y_i+\alpha_i - \beta_i^2/4\right))$
+which, when plugged in @eq-general_dual, gives the result.
+
+**Proof of @prp-multi-quantile-known-median (non-crossing multi-quantile
+regression with known median).**
+
+Here, we have $p=0$ and $q=q_{-}+q_{+}$. The loss function is lower
+semi-continuous and bounded below because the pinball loss is
+non-negative, such that @thm-general-representer-theorem holds. This is
+the same for @prp-formulation-A because $\Omega$ is strictly convex.
+Besides, the loss function is continuous in
+$(f_{\mathbf{A}^0_{-j}}(x_i),f_{\mathbf{A}^0_{k}}(x_i))_{1\leq i \leq n,\, 1 \leq j \leq q_{-},\, 1 \leq k \leq q_{+}}$
+for e.g.
+$\mathbf{A}^0_{-j}=\mathbf{I}_{r_{-j}},\, \mathbf{A}^0_{k}=\mathbf{I}_{r_{k}}$
+and @thm-general-dual-formulation applies as well. Now, denoting
+$u_{i,j}=\tilde{f}_{\mathbf{A}_{-j}}(x_i)$ and
+$v_{i,k}=\tilde{f}_{\mathbf{A}_{k}}(x_i)$, the loss function writes as
+$$\begin{align*}
+&L((u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}}) \\
+&= \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(t_i+ \sum_{j'=1}^j u_{i,j}\right) + 
+\sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(t_i - \sum_{k'=1}^k v_{i,k}\right)\\
+&= \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(t_i - \tilde{u}_{i,j}\right) + 
+\sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(t_i - \tilde{v}_{i,k}\right)\\
+&= \tilde{L}((\tilde{u}_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(\tilde{v}_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})\\
+&= (\tilde{L} \circ T)((u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})
+\end{align*}$$ where
+$T:\; (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}} \mapsto (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}$
+is the linear map defined as $$\begin{align*}
+T((u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})&=\left(\left(- \sum_{j'=1}^j u_{i,j}\right)_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},\left(\sum_{k'=1}^k v_{i,k}\right)_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}}\right).
+\end{align*}$$ Denoting
+$\underline{\boldsymbol{\alpha}}=((\boldsymbol{\alpha}_{-j})_{1 \leq j \leq q_{-}},(\boldsymbol{\alpha}_{k})_{1 \leq k \leq q_{+}})$
+and
+$\underline{\tilde{\boldsymbol{\alpha}}}=((\tilde{\boldsymbol{\alpha}}_{-j})_{1 \leq j \leq q_{-}},(\tilde{\boldsymbol{\alpha}}_{k})_{1 \leq k \leq q_{+}})$,
+by Theorem 16.3 in @Rockafellar+1970, we thus have $$\begin{align*}
+L^{\star}((\boldsymbol{\alpha}_{-j})_{1 \leq j \leq q_{-}},(\boldsymbol{\alpha}_{k})_{1 \leq k \leq q_{+}}) &= \underset{\substack{\underline{\tilde{\boldsymbol{\alpha}}} \\ T^{\star}\underline{\tilde{\boldsymbol{\alpha}}} = \underline{\boldsymbol{\alpha}} }}{\inf} \quad \tilde{L}^{\star} ((\tilde{\boldsymbol{\alpha}}_{-j})_{1 \leq j \leq q_{-}},(\tilde{\boldsymbol{\alpha}}_{k})_{1 \leq k \leq q_{+}}) \\
+&= \tilde{L}^{\star}(T^{-\top} \underline{\boldsymbol{\alpha}})
+\end{align*}$$ since $T^{\star}=T^{\top}$ is invertible. Plugging this
+formula in @thm-general-dual-formulation gives the dual formulation
+$$\begin{align*}
+\underset{ \underline{\boldsymbol{\alpha}} \in (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}
+}{\sup}  \quad &  -\tilde{L}^{\star}(-T^{-\top} \underline{\boldsymbol{\alpha}}) \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(\boldsymbol{\alpha}_{-j}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2 \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\boldsymbol{\alpha}_{k}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2
+\end{align*}$$ and we use the change of variable
+$T^{-\top} \underline{\boldsymbol{\alpha}} \leftrightarrow  \underline{\boldsymbol{\alpha}}$
+to get $$\begin{align*}
+\underset{ \underline{\boldsymbol{\alpha}} \in (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}
+}{\sup}  \quad &  -\tilde{L}^{\star}(-\underline{\boldsymbol{\alpha}}) \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(-\sum_{l=j}^{q_{-}}\boldsymbol{\alpha}_{-l}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2 \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\sum_{l=k}^{q_{+}}\boldsymbol{\alpha}_{l}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2
+\end{align*}$$ by definition of $T^{\top}$. Besides, $\tilde{L}$ is
+separable, and the Fenchel conjugate $\rho_{\tau}^{\star}(u^{\star})$ of
+the pinball loss $\rho_{\tau}(y-u)$ is $$\begin{equation*}
+\rho_{\tau}^{\star}(u^{\star}) = \begin{cases}
+yu^{\star} \quad &\mathrm{if} \; -\tau \leq u^{\star} \leq 1-\tau \\
++ \infty &\mathrm{otherwise,}
+\end{cases}
+\end{equation*}$$ which yields $$\begin{equation*}
+\tilde{L}^{\star}(\underline{\boldsymbol{\alpha}}) = \sum_{j=1}^{q_{-}} \sum_{i=1}^n t_i \alpha_{i,j} + \sum_{k=1}^{q_{+}} \sum_{i=1}^n t_i \alpha_{i,k}= \boldsymbol{t}^{\top}\left(\sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right)
+\end{equation*}$$ if
+$\boldsymbol{\alpha}_{-j} \in [-\tau_{-j},1-\tau_{-j}],\; \boldsymbol{\alpha}_{k} \in [-\tau_{k},1-\tau_{k}]$
+for $j=1,\ldots,q_{-},\; k=1,\ldots,q_{+}$ and $+ \infty$ otherwise. The
+final dual formulation then directly follows.
+
+**Proof of @prp-multi-quantile-joint (non-crossing multi-quantile
+regression with unknown median).**
+
+The proof is similar to the one of @prp-multi-quantile-known-median,
+except that here we have $p=1$ and $q=q_{-}+q_{+}$, but
+@thm-general-representer-theorem, @prp-formulation-A and
+@thm-general-dual-formulation still apply with the exact same reasoning.
+The main difference is that, denoting
+$w_i=\boldsymbol{k}^{g}(x_i)^{\top}\boldsymbol{\gamma}$, the loss
+function now writes $$\begin{align*}
+&L((w_{i})_{1 \leq i \leq n},(u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}}) \\
+&= \sum_{i=1}^n \rho_{0.5}\left(y_i - w_i\right) +
+\sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(y_i - w_i + \sum_{j'=1}^j u_{i,j}\right) + 
+\sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(y_i - w_i - \sum_{k'=1}^k v_{i,k}\right)\\
+&= \sum_{i=1}^n \rho_{0.5}\left(y_i - \tilde{w}_i\right) + \sum_{j=1}^{q_{-}} \sum_{i=1}^n \rho_{\tau_{-j}}\left(y_i - \tilde{u}_{i,j}\right) + 
+\sum_{k=1}^{q_{+}} \sum_{i=1}^n \rho_{\tau_{k}}\left(y_i - \tilde{v}_{i,k}\right)\\
+&= \tilde{L}((\tilde{w}_{i})_{1 \leq i \leq n},(\tilde{u}_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(\tilde{v}_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})\\
+&= (\tilde{L} \circ T)((w_{i})_{1 \leq i \leq n},(u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})
+\end{align*}$$ where
+$T:\; \mathbb{R}^n \times (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}} \mapsto \mathbb{R}^n \times (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}$
+is the linear map defined as $$\begin{align*}
+& T((w_{i})_{1 \leq i \leq n},(u_{i,j})_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},(v_{i,k})_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}})\\
+&=\left(\left(w_i \right)_{1 \leq i \leq n},\left(w_i - \sum_{j'=1}^j u_{i,j}\right)_{1 \leq i \leq n,\, 1 \leq j \leq q_{-}},\left(w_i+\sum_{k'=1}^k v_{i,k}\right)_{1 \leq i \leq n,\, 1 \leq k \leq q_{+}}\right)
+\end{align*}$$ such that $$\begin{align*}
+L^{\star}(\boldsymbol{\beta},(\boldsymbol{\alpha}_{-j})_{1 \leq j \leq q_{-}},(\boldsymbol{\alpha}_{k})_{1 \leq k \leq q_{+}}) &= \underset{\substack{\tilde{\boldsymbol{\beta}},\,\underline{\tilde{\boldsymbol{\alpha}}} \\ T^{\star}(\tilde{\boldsymbol{\beta}},\underline{\tilde{\boldsymbol{\alpha}}}) = (\boldsymbol{\beta},\underline{\boldsymbol{\alpha}}) }}{\inf} \quad \tilde{L}^{\star} (\tilde{\boldsymbol{\beta}},(\tilde{\boldsymbol{\alpha}}_{-j})_{1 \leq j \leq q_{-}},(\tilde{\boldsymbol{\alpha}}_{k})_{1 \leq k \leq q_{+}}) \\
+&= \tilde{L}^{\star}(T^{-\top}(\boldsymbol{\beta},\underline{\boldsymbol{\alpha}})).
+\end{align*}$$ The dual formulation is thus $$\begin{align*}
+\underset{ \boldsymbol{\beta}\in \mathbb{R}^n,\,\underline{\boldsymbol{\alpha}} \in (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}
+}{\sup}  \quad &  -\tilde{L}^{\star}(-T^{-\top} (\boldsymbol{\beta},\underline{\boldsymbol{\alpha}})) \\
+\quad & - \frac{1}{4\lambda^{g}} \boldsymbol{\beta}^{\top}\boldsymbol{K}^{g} \boldsymbol{\beta}  \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(\boldsymbol{\alpha}_{-j}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2 \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\boldsymbol{\alpha}_{k}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2
+\end{align*}$$ which, after the change of variable
+$T^{-\top}(\boldsymbol{\beta},\underline{\boldsymbol{\alpha}}) \leftrightarrow  (\boldsymbol{\beta},\underline{\boldsymbol{\alpha}})$,
+is equivalent to $$\begin{align*}
+\underset{ \boldsymbol{\beta}\in \mathbb{R}^n,\,\underline{\boldsymbol{\alpha}} \in (\mathbb{R}^n)^{q_{-}} \times (\mathbb{R}^n)^{q_{+}}
+}{\sup}  \quad &  -\tilde{L}^{\star}(-\boldsymbol{\beta},-\underline{\boldsymbol{\alpha}}) \\
+\quad & - \frac{1}{4\lambda^{g}} \left(\boldsymbol{\beta}+ \sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right)^{\top}\boldsymbol{K}^{g} \left(\boldsymbol{\beta}+ \sum_{j=1}^{q_{-}} \boldsymbol{\alpha}_{-j}+  \sum_{k=1}^{q_{+}} \boldsymbol{\alpha}_{k}\right)  \\
+\quad &  - \sum_{j=1}^{q_{-}} \frac{1}{4\lambda^{f}_{-j2}} \left\lVert \left[\mathbf{V}_{-j}\mathrm{Diag}\left(-\sum_{l=j}^{q_{-}}\boldsymbol{\alpha}_{-l}\right)\mathbf{V}_{-j}^{\top} - \lambda^{f}_{-j1} \mathbf{I}_{r_{-j}}\right]_+\right\rVert_F^2 \\
+\quad & - \sum_{k=1}^{q_{+}} \frac{1}{4\lambda^{f}_{k2}} \left\lVert \left[\mathbf{V}_{k}\mathrm{Diag}\left(\sum_{l=k}^{q_{+}}\boldsymbol{\alpha}_{l}\right)\mathbf{V}_{k}^{\top} - \lambda^{f}_{k1} \mathbf{I}_{r_{k}}\right]_+\right\rVert_F^2
+\end{align*}$$ by definition of $T^{\top}$. The Fenchel conjugate of
+$\tilde{L}$ is the same as in the proof of
+@prp-multi-quantile-known-median with an additional pinball loss term
+for $\tau=0.5$ and where $t_i$ is replaced with $y_i$, which yields the
+final dual formulation.
+
+**Proof of @prp-dens-est (density estimation).**
+
+We start by considering the Lagrangian formulation of the
+finite-dimensional constrained problem, which gives the dual
+$$\begin{aligned}
+d &= \underset{  \theta\in\mathbb{R}
+}{\sup}  \; \underset{  \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \; - \sum_{i=1}^n\log(\tilde{f}_{\mathbf{A}}(x_i)) + \Omega(\mathbf{A}) + \theta(\mathop{\mathrm{Tr}}(\mathbf{A}\mathbf{W}_{\nu})-1)  \\
+&= \underset{  \theta\in\mathbb{R}
+}{\sup}  \; - \theta + \left(\underset{  \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \; - \sum_{i=1}^n\log(\tilde{f}_{\mathbf{A}}(x_i)) + \Omega(\mathbf{A}) + \theta \mathop{\mathrm{Tr}}(\mathbf{A}\mathbf{W}_{\nu})\right)
+\end{aligned}$$ {#eq-apx-lagrangian-density} where we have used the fact
+that
+$\int_{\mathcal{X}} \tilde{f}_{\mathbf{A}}(x)\nu(x)dx=\mathop{\mathrm{Tr}}(\mathbf{A}\mathbf{W}_{\nu})$,
+see @marteauferey2020. Since the primal is feasible and finite for e.g.
+$\mathbf{A}=\mathbf{I}_{r}/ \mathop{\mathrm{Tr}}(\mathbf{W}_{\nu}) \succeq 0$,
+Slater's condition holds and we have strong duality. On the other hand,
+for fixed $\theta$, the inner problem $$\begin{equation*}
+\underset{  \mathbf{A}\in \mathbb{S}_{+}^{r}
+}{\inf} \; - \sum_{i=1}^n\log(\tilde{f}_{\mathbf{A}}(x_i)) + \Omega(\mathbf{A}) + \theta \mathop{\mathrm{Tr}}(\mathbf{A}\mathbf{W}_{\nu})
+\end{equation*}$$ satisfies all the assumptions of
+@cor-apx-dual-formulation-linear with $p=0$, $q=1$,
+$\mathbf{W}_1=\theta \mathbf{W}_{\nu}$ and
+$L(u_1,\ldots,u_n) = -\sum_{i=1}^n \log(u_i)$ with Fenchel conjugate
+$L^{\star}(u^{\star}_1,\ldots,u^{\star}_n) = \sum_{i=1}^n \left( - (1 + \log(-u^{\star}_i))\right)$
+for $u^{\star}_i < 0$. The final dual formulation trivially follows by
+plugging the dual formulation of the inner problem $$\begin{equation*}
+\underset{\boldsymbol{\alpha}\in\mathbb{R}^n
+}{\sup} \; - L^{\star}(-\boldsymbol{\alpha}) - \frac{1}{4\lambda^{f}_{2}} \lVert [\mathbf{V}\mathrm{Diag}(\boldsymbol{\alpha})\mathbf{V}^{\top} - \lambda^{f}_{1} \mathbf{I}_{r}-\theta \mathbf{W}_{\nu}]_+\rVert_F^2
+\end{equation*}$$ from @cor-apx-dual-formulation-linear in
+@eq-apx-lagrangian-density with $L^{\star}$ given above.
+
+# Details about numerical experiments {#sec-apx-exps}
+
+For all our numerical experiments, we detail below the results of the
+cross-validation procedure that leads to the best set of hyperparameters
+which we used to generate each figure in @sec-kSoS-problems. In
+particular, all cross-validations are made with $5$ folds and the
+features on the training samples are scaled to zero mean and unit
+variance beforehand such that the candidate lengthscales that are tested
+are always comparable across all tasks. For readability we only provide
+the best cross-validation combinations in each instance. Finally, except
+for density estimation where we use the `L-BFGS` solver, the `AGD`
+solver is chosen for solving all dual formulations (this choice was made
+to select the most efficient solver in each case).
+
+## Heteroscedastic regression with known mean {#sec-apx-exps-hetreg-known-mean}
+
+For lengthscales we use the list of candidates
+$[0.4, 0.5, 0.6, 0.7, 0.8]$ and for regularization penalties
+$[0.01,0.1,1]$. We first perform cross-validation on the kernel ridge
+regression part to estimate the hyperparameters
+$(\theta^{\mu}, \lambda^{\mu})$ for the mean function alone, with a
+least-squares score: results are displayed in
+@tbl-cv_heteroscedastic_sequential(a). Then, we run another
+cross-validation to estimate the hyperparameters
+$(\theta^{f}, \lambda_{1}^{f}, \lambda_{2}^{f})$ of the variance
+function, with a score given by the negative log-likelihood. The results
+are given in @tbl-cv_heteroscedastic_sequential(b).
+
+::: {#tbl-cv_heteroscedastic_sequential layout-ncol="2"}
+  $\theta^{\mu}$   $\lambda^{\mu}$      CV score
+  ---------------- ----------------- --------------
+  **0.5**          **0.1**            **154.5067**
+  0.6              0.1                  155.0722
+  0.4              1                    155.0790
+  0.8              0.01                 155.0830
+  0.4              0.1                  155.1892
+  0.6              1                    155.5632
+
+  : ​ {#tbl-cv_heteroscedastic_sequential-a}
+
+  $\theta^{f}$   $\lambda_{1}^{f}$   $\lambda_{2}^{f}$     CV score
+  -------------- ------------------- ------------------- -------------
+  **0.6**        **0.01**            **0.01**             **33.4455**
+  0.5            0.01                0.1                    33.9745
+  0.6            1                   0.1                    34.0711
+  0.5            1                   0.01                   34.1408
+  0.7            0.1                 0.1                    34.1881
+  0.6            1                   0.01                   34.1991
+
+  : ​ {#tbl-cv_heteroscedastic_sequential-b}
+
+CV results for sequential heteroscedastic regression: mean function
+(left) and variance function (right).
+:::
+
+## Non-crossing multi-quantile regression with known median {#sec-apx-exps-quantreg-known-median}
+
+For sequential non-crossing multi-quantile regression, we first perform
+cross-validation on the kernel quantile regression part for the median,
+to estimate the lengthscale $\theta^{q_{0.5}}$, while
+$\lambda^{q_{0.5}}$ is fixed to $1$. The lengthscale candidates are
+$[0.7, 0.9, 1.1, 1.3]$. The score function used here is the median
+pinball loss. The results are displayed in @tbl-cv_multiquantile_median.
+
+::: {#tbl-cv_multiquantile_median}
+  $\theta^{q_{0.5}}$     CV score
+  -------------------- -------------
+  **0.7**               **77.2404**
+  0.9                     78.7977
+  1.1                     83.1513
+  1.3                     89.9806
+
+  : CV results for median regression.
+:::
+
+Then, we perform two cross-validations to choose the lengthscales in
+each of the settings we investigate, with a score function given by the
+sum of all the quantile pinball losses and the same grid of lengthscale
+candidates. In the same lengthscale setting, we estimate a common
+lengthscale $\theta^{f}$ for all quantile functions: results are given
+in @tbl-cv_multiquantile(a). In the free lengthscale setting, we lessen
+this contraint by allowing two different lengthscales:
+$\theta^{f}_{\mathrm{low}}$, common to all quantile functions below the
+median, and $\theta^{f}_{\mathrm{upp}}$ common to those above. We give
+the results in @tbl-cv_multiquantile(b). In all instances we fix
+$(\lambda^{f}_{1}, \lambda^{f}_{2})$ to $1$.
+
+::: {#tbl-cv_multiquantile layout-ncol="2"}
+  $\theta^{f}$      CV score
+  -------------- --------------
+  **0.7**         **269.0395**
+  0.9               269.7175
+  1.1               274.9520
+  1.3               275.5860
+
+  : ​ {#tbl-cv_multiquantile-a}
+
+  $\theta_{\text{low}}^{f}$   $\theta_{\text{upp}}^{f}$      CV score
+  --------------------------- --------------------------- --------------
+  **1.3**                     **0.7**                      **268.9982**
+  0.7                         0.7                            269.0395
+  1.1                         0.7                            269.0574
+  0.9                         0.7                            269.1660
+
+  : ​ {#tbl-cv_multiquantile-b}
+
+CV results for quantiles in sequential multi-quantile regression: same
+lengthscales (left) and free lengthscales (right).
+:::
+
+## Density estimation {#sec-apx-exps-density-estimation}
+
+For the density estimation problem, we use the usual $L^{2}$ norm
+criterion equal to
+$\int_{\mathcal{X}} (p(x)-\hat{p}(x))^{2}\, \mathrm{d}x$ as the score
+function, which writes in the cross-validation setting as
+$\int_{\mathcal{X}} \hat{p}(x)^{2}\, \mathrm{d}x - \frac{2}{n} \sum_{k=1}^K \sum_{i \in I_K} \hat{p}_{-I_K}(x_i)$
+where $I_k$ is the set of indices in the $k$-th fold and
+$\hat{p}_{-I_K}$ is the estimate trained without the samples in $I_k$.
+Our density estimation problem is a $2$ dimensional example, we then use
+an anisotropic kernel with different lengthscales
+$(\theta_{x_1}^{f}, \theta_{x_2}^{f})$ on each dimension.
+Cross-validation estimates the hyperparameters
+$(\theta_{x_1}^{f}, \theta_{x_2}^{f}, \lambda_{1}^{f}, \lambda_{2}^{f})$,
+with lengthscale candidates $[0.3, 0.4, 0.5, 0.6, 0.7, 0.8]$ and
+regularization penalties $[0.01, 0.1, 1.0]$. Results are displayed in
+@tbl-cv_density_estimation.
+
+::: {#tbl-cv_density_estimation}
+  $\theta_{x_1}^{f}$   $\theta_{x_2}^{f}$   $\lambda_{1}^{f}$   $\lambda_{2}^{f}$     CV score
+  -------------------- -------------------- ------------------- ------------------- -------------
+  **0.7**              **0.8**              **1.0**             **1.0**              **-0.4779**
+  0.7                  0.8                  0.1                 1.0                    -0.4778
+  0.7                  0.8                  0.01                1.0                    -0.4778
+  0.6                  0.8                  1.0                 1.0                    -0.4773
+  0.6                  0.8                  0.1                 1.0                    -0.4770
+  0.8                  0.8                  1.0                 1.0                    -0.4769
+
+  : CV results for density estimation.
+:::
+
+## Heteroscedastic regression {#sec-apx-exps-hetreg}
+
+For the joint learning problem in heteroscedastic regression with
+unknown mean, the cross-validation procedure now estimates all
+hyperparameters
+$(\theta^{g}, \theta^{f}, \lambda^{g}, \lambda_{1}^{f}, \lambda_{2}^{f})$
+jointly. We use the same candidate grids as in
+@sec-apx-exps-hetreg-known-mean, results are given in
+@tbl-cv_heteroscedastic_joint.
+
+::: {#tbl-cv_heteroscedastic_joint}
+  $\theta^{g}$   $\theta^{f}$   $\lambda^{g}$   $\lambda_{1}^{f}$   $\lambda_{2}^{f}$     CV score
+  -------------- -------------- --------------- ------------------- ------------------- -------------
+  **0.4**        **0.6**        **0.01**        **0.01**            **0.01**             **37.8797**
+  0.4            0.6            0.01            1                   0.01                   37.9787
+  0.4            0.6            0.01            0.1                 0.01                   38.0116
+  0.5            0.7            0.01            1                   0.1                    38.1037
+  0.4            0.7            0.01            1                   0.1                    38.1186
+  0.4            0.7            0.01            1                   0.01                   38.1552
+
+  : CV results for joint heteroscedastic regression.
+:::
+
+## Non-crossing multi-quantile regression {#sec-apx-exps-quantreg}
+
+When considering the sequential problem, as in the top row of
+@fig-multi-quantiles-joint, the estimation is done sequentially
+following exactly the free setting in
+@sec-apx-exps-quantreg-known-median. The results of the
+cross-validations for the median and quantiles are given in
+@tbl-cv_multiquantile_sequential (observe that the numbers are not the
+same as in @sec-apx-exps-quantreg-known-median because the random seed
+generating the data is not the same).
+
+::: {#tbl-cv_multiquantile_sequential layout-ncol="2"}
+  $\theta^{q_{0.5}}$     CV score
+  -------------------- -------------
+  **0.7**               **81.8059**
+  0.9                     82.8395
+  1.1                     85.5509
+  1.3                     91.2074
+
+  : ​ {#tbl-cv_multiquantile_sequential-a}
+
+  $\theta_{\text{low}}^{f}$   $\theta_{\text{upp}}^{f}$      CV score
+  --------------------------- --------------------------- --------------
+  **0.9**                     **0.7**                      **282.3186**
+  0.7                         0.7                            282.4091
+  1.3                         0.7                            282.6543
+  1.1                         0.7                            282.9056
+
+  : ​ {#tbl-cv_multiquantile_sequential-b}
+
+CV results for sequential multi-quantile regression: median function
+(left) and quantile functions (right).
+:::
+
+For the joint learning problem, cross-validation estimates all
+hyperparameters
+$(\theta^{g}, \theta^{f}_{\mathrm{low}}, \theta^{f}_{\mathrm{upp}})$
+jointly. The parameters
+$(\lambda^{g}, \lambda^{f}_{1}, \lambda^{f}_{2})$ are all fixed to $1$:
+results are displayed in @tbl-cv_multiquantile_joint.
+
+::: {#tbl-cv_multiquantile_joint}
+  $\theta^{g}$   $\theta_{low}^{f}$   $\theta_{upp}^{f}$      CV score
+  -------------- -------------------- -------------------- --------------
+  **0.9**        **1.3**              **0.7**               **282.6605**
+  0.9            0.9                  0.7                     282.7645
+  0.7            1.3                  0.7                     282.7816
+  0.9            1.1                  0.7                     282.8602
+  0.9            0.7                  0.7                     282.8913
+  0.7            1.3                  0.9                     282.9010
+
+  : CV results for joint multi-quantile regression.
 :::
