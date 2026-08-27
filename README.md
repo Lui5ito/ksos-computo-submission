@@ -1,5 +1,4 @@
-# Joint learning of RKHS and kernel sum-of-squares functions:  
-a representer theorem and its convex dual
+# Joint learning of RKHS and kernel sum-of-squares functions: a representer theorem and its convex dual
 
 Louis Allain, Sébastien Da Veiga
 2026-08-27
@@ -11,9 +10,9 @@ Submitted to Computo.
 ### Badges
 
 [![build and
-publish](https://github.com/Lui5ito/computo/actions/workflows/build.yml/badge.svg)](https://github.com/Lui5ito/computo/actions/workflows/build.yml)
-[![reviews](https://img.shields.io/badge/review-report-blue)](https://github.com/Lui5ito/computo/issues?q=is%3Aopen+is%3Aissue+label%3Areview)
-[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/Lui5ito/computo)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/Lui5ito/computo)
+publish](https://github.com/Lui5ito/ksos-computo-submission/actions/workflows/build.yml/badge.svg)](https://github.com/Lui5ito/ksos-computo-submission/actions/workflows/build.yml)
+[![reviews](https://img.shields.io/badge/review-report-blue)](https://github.com/Lui5ito/ksos-computo-submission/issues?q=is%3Aopen+is%3Aissue+label%3Areview)
+[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/Lui5ito/ksos-computo-submission)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/Lui5ito/ksos-computo-submission)
 [![DOI:10.5072/computo.0000](https://img.shields.io/badge/DOI-10.5072%2Fcomputo.0000-034E79.svg)](https://doi.org/10.5072/computo.0000)
 [![Creative Commons
 License](https://i.creativecommons.org/l/by/4.0/80x15.png)](http://creativecommons.org/licenses/by/4.0/)
